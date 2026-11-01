@@ -72,14 +72,32 @@ come first.
 | # | Action | Why |
 |---|---|---|
 | P1 | Create `main` from `docs/architecture`, **set it as the default branch** | Today the default branch is `docs/architecture`. `deploy.yml` triggers on `main` (§8) and a long-lived doc branch should not be the trunk. |
-| P2 | Enable branch protection on `main`: require PR + green CI, no direct pushes | Keeps the trunk deployable. This is what makes `Closes #N` meaningful. |
+| P2 | Enable branch protection on `main`: require PR + green CI, no direct pushes | Keeps the trunk deployable. This is what makes `Closes #N` meaningful. **BLOCKED on a free private repo:** rulesets and branch protection both return `403 Upgrade to GitHub Pro or make this repository public`. Unblocked by the same decision as P3. Until then, protection is by convention only. |
 | P3 | **Resolve repo visibility — CONFIRMED BLOCKER.** The repo is **private** (`api.github.com/repos/manslaughter03/sport-app` → 404 unauthenticated; only `git@` over SSH works). GitHub Pages on a private repo requires a paid plan | Decide before S10: make the repo public, upgrade, or drop Pages from v0 and install via LAN (architecture §6). **v0 can be fully usable without Pages** — S10 splits into "PWA works" (still needed) and "deployed to Pages" (deferrable). |
-| P4 | Confirm Node 22 LTS is the target (`.nvmrc`) | This sandbox has no Node, so CI is the source of truth for the first slices. Pin it in one place. |
+| P4 | Install **Node 26 LTS** locally (currently `v26.13.0`) and pin it | There is **no Node on this machine at all** — no `node`, `npm`, `npx`, `nvm`, `fnm`, or `corepack`. Without it, nothing can be built or tested locally; CI would be the only gate. Pin in `.nvmrc` (`26`), `package.json` `engines`, and CI via `setup-node` + `node-version-file: .nvmrc`. |
 | P5 | Create the v0 issues from §4 so PRs can say `Closes #N` | One issue per slice. |
+| P6 | Commit a **project-level `AGENTS.md`** (in S1) | The user-level `~/AGENTS.md` is a generic template that names a `v1` branch and Go commands — both wrong here, and it would actively mislead an agent. The project file wins. See §2.1. |
 
 > **Note on branch naming:** the repo-level convention is `feature/<name>` / `fix/<name>` off the
 > integration branch. `~/AGENTS.md` mentions a `v1` branch — that is the generic template and does
 > not match this repo (architecture §8 deploys on `main`). **This plan uses `main`.**
+
+### 2.1 Agent instructions — yes, in Phase 1
+
+Not optional, and it belongs in **S1** rather than "later". The reason is that this project's
+correctness rests on invariants that a well-meaning agent will otherwise violate in the first hour:
+
+| Invariant | Why it must be written down | Also enforced by |
+|---|---|---|
+| `domain/` imports nothing from `data/` or `ui/` | A single `import { db }` makes the whole test strategy collapse | ESLint `no-restricted-imports` |
+| `domain/` never calls `Date` / `Date.now` / `performance.now` | Time-zone and day-boundary bugs are the top correctness risk (R5) | ESLint `no-restricted-globals` |
+| `day` is computed on write from injected settings, never from UTC | Same | code review + S2 tests |
+| No network calls, ever | Local-first is the product, not a preference | review |
+| Nothing from the "NOT in v0" list (§1) | The gate against scope creep (R6) | review |
+
+Keep it short (~40 lines): build/test/lint commands, the layer map, the invariants above, the
+commit/branch convention, and a pointer to this plan. It is documentation for contributors,
+human or otherwise — not a second architecture document. Update it when a slice changes a command.
 
 ---
 
@@ -118,7 +136,7 @@ criterion and the issue body.
 
 Files: `package.json`, `tsconfig.json`, `.nvmrc`, `.gitignore`, `vite.config.ts`,
 `eslint.config.js`, `index.html`, `src/main.tsx`, `src/ui/screens/Today.tsx` (placeholder),
-`.github/workflows/ci.yml`, `README.md`.
+`.github/workflows/ci.yml`, `README.md`, **`AGENTS.md`** (§2.1).
 
 Key config:
 - `base: "/sport-app/"` — Pages serves a subpath; get this wrong and the PWA 404s (§8).
@@ -341,7 +359,7 @@ All nine pass → **v0 shipped**. Any failure → the slice that owns it is not 
 | R4 | **Android evicts site data** → all history gone. | Export in v0 (S9) + `storage.persist()` + the 14-day nudge. This is the highest-consequence risk in the whole project. |
 | R5 | **Time-zone / day-boundary bugs** corrupt the weekly numbers. | All of it is in `period.ts` (S2) behind injected time, with DST + cutoff cases. This is why the domain has no clock. |
 | R6 | **Scope creep into Phase 2** (month view, import, streaks). | The "NOT in v0" list in §1 is the gate. New ideas become Phase 2 issues, not v0 commits. |
-| R7 | **No Node in the build sandbox** → slices cannot be verified locally here. | CI is the gate; keep `ci.yml` from S1 and require it green before merge (P2). |
+| R7 | **No Node on this machine** (confirmed: nothing installed) → no local build, no local test, no `vite preview` to poke at. | Install Node 26 LTS before S1 (P4). Until then CI is the only gate, which makes the lack of branch protection (P2) bite: an unverified PR can be merged by hand. |
 
 ---
 
@@ -381,10 +399,18 @@ Roughly **4–6 focused sessions** to the §5 script passing.
 
 ---
 
-## 9. Open items to confirm before S1
+## 9. Open items before S1
 
-1. **`main` as trunk** (P1) — confirms the branch model this plan assumes.
-2. **Repo visibility** (P3) — decides whether S10 deploys to Pages or installs over LAN.
-3. **Seed numbers** (§S5: 300 push-ups / 15 min core / 150 toe touch / 4 active days) — are
-   these close enough to your real targets to ship as defaults, or should the first-run set be
-   lower so v0 opens on a good week?
+Settled: **`main` is the trunk** (P1) — agreed. **`gh` is installed and authenticated** with `repo`
+scope and `ADMIN` on the repo, so PRs and repo settings can be driven from here.
+
+Still open — **one decision unblocks both**:
+
+1. **Repo visibility** (P3 + P2). Private + free plan means **no Pages and no branch protection**.
+   Public unblocks both in one move; staying private means LAN install (S10a only) and
+   protection by convention. This is the only true blocker for v0's "installed from the Pages URL"
+   wording, and it blocks P2's safety net regardless.
+2. **Node 26 LTS install** (P4) — needed before S1 can be verified locally at all.
+3. **Seed numbers** (§S5: 300 push-ups / 15 min core / 150 toe touch / 4 active days) — close
+   enough to your real targets to ship as defaults, or should the first-run set be lower so v0
+   opens on a good week?
