@@ -10,19 +10,22 @@ import { useState } from "preact/hooks";
 import type { AppContext } from "./app.ts";
 import { Today } from "./screens/Today.tsx";
 import { Progress } from "./screens/Progress.tsx";
+import { Targets } from "./screens/Targets.tsx";
 
 export interface AppProps {
   ctx: AppContext;
 }
 
-type Screen = "today" | "progress";
+type Screen = "today" | "progress" | "targets";
 
 export function App({ ctx }: AppProps) {
   const [screen, setScreen] = useState<Screen>("today");
 
   return (
     <main class="app">
-      {screen === "today" ? <Today ctx={ctx} /> : <Progress ctx={ctx} />}
+      {screen === "today" ? <Today ctx={ctx} /> : null}
+      {screen === "progress" ? <Progress ctx={ctx} /> : null}
+      {screen === "targets" ? <Targets ctx={ctx} /> : null}
 
       <nav class="nav" aria-label="Main">
         <button
@@ -40,6 +43,14 @@ export function App({ ctx }: AppProps) {
           onClick={() => setScreen("progress")}
         >
           Progress
+        </button>
+        <button
+          type="button"
+          class="nav__item"
+          aria-current={screen === "targets" ? "page" : undefined}
+          onClick={() => setScreen("targets")}
+        >
+          Targets
         </button>
       </nav>
     </main>
