@@ -81,6 +81,13 @@ export interface Entry {
   /** Reps, or seconds for duration. */
   readonly amount: number;
   readonly createdAt: IsoInstant;
+  /**
+   * Monotonic insertion order.
+   *
+   * `createdAt` cannot order two sets logged in the same millisecond, which
+   * would make "undo last" delete an arbitrary one. This is the tie-break.
+   */
+  readonly seq: number;
   readonly note?: string;
 }
 
