@@ -3,7 +3,14 @@
 // database is constructed.
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/preact";
+import {
+  cleanup,
+  fireEvent,
+  render as renderInto,
+  screen,
+  waitFor,
+  type RenderResult,
+} from "@testing-library/preact";
 import { createApp, type AppContext } from "../app.ts";
 import { Today } from "./Today.tsx";
 import { createDatabase } from "../../data/db.ts";
@@ -40,27 +47,51 @@ beforeEach(async () => {
   await seedIfEmpty(db, clock);
 });
 
+const mounted: RenderResult[] = [];
+
+/**
+ * Unmounts every render *before* the database closes.
+ *
+ * A liveQuery subscription that outlives its database rejects with
+ * DatabaseClosedError, which Vitest reports as an unhandled rejection and turns
+ * into a red build — even though every assertion passed. Order matters.
+ */
 afterEach(async () => {
+  for (const result of mounted.splice(0)) {
+    result.unmount();
+  }
   cleanup();
+  // Dexie needs the writes issued by the unmounted components to settle before
+  // the database closes, or the pending liveQuery rejects with
+  // DatabaseClosedError. Unhandled rejections fail the build even when every
+  // assertion passed, so this drain is not optional.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await ctx.db.close();
   await ctx.db.delete();
 });
 
+function renderToday(): RenderResult {
+  const result = renderInto(<Today ctx={ctx} />);
+  mounted.push(result);
+  return result;
+}
+
 describe("Today — rendering", () => {
   it("lists the seeded exercises", async () => {
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => expect(screen.getByText("Push-up")).toBeTruthy());
     expect(screen.getByText("Core")).toBeTruthy();
     expect(screen.getByText("Toe Touch")).toBeTruthy();
   });
 
   it("shows zero for today when nothing is logged", async () => {
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => expect(screen.getByText("Push-up")).toBeTruthy());
     expect(screen.getAllByText("0").length).toBeGreaterThan(0);
   });
 
   it("renders reps buttons for a reps exercise and duration buttons for a duration exercise", async () => {
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => expect(screen.getByText("Push-up")).toBeTruthy());
 
     const pushup = screen.getByTestId("exercise-ex-pushup");
@@ -76,7 +107,7 @@ describe("Today — rendering", () => {
 
 describe("Today — quick add", () => {
   it("writes one entry per tap with the right exercise and amount", async () => {
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => expect(screen.getByText("Push-up")).toBeTruthy());
 
     fireEvent.click(screen.getByLabelText("Add 5 reps to Push-up"));
@@ -90,7 +121,7 @@ describe("Today — quick add", () => {
   });
 
   it("updates the today total without a manual refresh (liveQuery)", async () => {
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => expect(screen.getByText("Push-up")).toBeTruthy());
 
     fireEvent.click(screen.getByLabelText("Add 10 reps to Push-up"));
@@ -101,7 +132,7 @@ describe("Today — quick add", () => {
   });
 
   it("accumulates taps", async () => {
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => expect(screen.getByText("Push-up")).toBeTruthy());
 
     fireEvent.click(screen.getByLabelText("Add 10 reps to Push-up"));
@@ -116,7 +147,7 @@ describe("Today — quick add", () => {
   });
 
   it("writes seconds for a duration preset", async () => {
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => expect(screen.getByText("Core")).toBeTruthy());
 
     fireEvent.click(screen.getByLabelText("Add 60 seconds to Core"));
@@ -130,7 +161,7 @@ describe("Today — quick add", () => {
   });
 
   it("shows the duration total compactly in the quick-add row", async () => {
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => expect(screen.getByText("Core")).toBeTruthy());
 
     fireEvent.click(screen.getByLabelText("Add 90 seconds to Core"));
@@ -146,7 +177,7 @@ describe("Today — quick add", () => {
 
 describe("Today — undo", () => {
   it("removes exactly one set", async () => {
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => expect(screen.getByText("Push-up")).toBeTruthy());
 
     fireEvent.click(screen.getByLabelText("Add 10 reps to Push-up"));
@@ -164,7 +195,7 @@ describe("Today — undo", () => {
   });
 
   it("is disabled when there is nothing to undo", async () => {
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => expect(screen.getByText("Push-up")).toBeTruthy());
     const undo = screen.getByLabelText("Undo last set for Push-up") as HTMLButtonElement;
     expect(undo.disabled).toBe(true);
@@ -173,7 +204,7 @@ describe("Today — undo", () => {
 
 describe("Today — weekly ring", () => {
   it("shows the weekly percentage against the goal", async () => {
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => expect(screen.getByText("Push-up")).toBeTruthy());
 
     // 70 of 700 is 10 %.
@@ -195,7 +226,7 @@ describe("Today — weekly ring", () => {
     // Pre-load more than the weekly target: 700 * 1.4 = 980.
     await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 980 });
 
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => {
       const ring = screen.getByTestId("ring-ex-pushup");
       expect(ring.textContent).toContain("140 %");
@@ -207,7 +238,7 @@ describe("Today — weekly ring", () => {
   });
 
   it("shows the period day position so a small number is not misread", async () => {
-    render(<Today ctx={ctx} />);
+    renderToday();
     await waitFor(() => {
       expect(screen.getByTestId("day-position").textContent).toContain("3 of 7");
     });
