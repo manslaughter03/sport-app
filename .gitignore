@@ -1,0 +1,21 @@
+node_modules/
+dist/
+coverage/
+.npm-cache/
+
+# Local env / secrets — never commit these.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Tooling scratch
+.DS_Store
+*.log
+playwright-report/
+test-results/
+.vite/
+
+# TypeScript incremental build artifacts
+*.tsbuildinfo
