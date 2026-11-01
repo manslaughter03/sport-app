@@ -6,7 +6,7 @@
  * here reads `Date`.
  */
 
-import { useCallback, useMemo } from "preact/hooks";
+import { useCallback, useMemo, useState } from "preact/hooks";
 import type { AppContext } from "../app.ts";
 import { useLiveQuery } from "../live.ts";
 import { QuickAdd } from "../components/QuickAdd.tsx";
@@ -43,17 +43,36 @@ export function Today({ ctx }: TodayProps) {
     [ctx],
   );
 
+  const [writeError, setWriteError] = useState<string | undefined>(undefined);
+
+  /**
+   * Writes are awaited and their failure is surfaced.
+   *
+   * A floating `void write()` would swallow a failed set: the tap looks like it
+   * worked, nothing is stored, and the ring never moves. It also leaks an
+   * unhandled rejection whenever the write loses its race with teardown.
+   */
   const handleAdd = useCallback(
     async (exerciseId: string, amount: number) => {
-      await ctx.entries.addSet({ exerciseId, amount });
+      try {
+        await ctx.entries.addSet({ exerciseId, amount });
+        setWriteError(undefined);
+      } catch (error) {
+        setWriteError(error instanceof Error ? error.message : String(error));
+      }
     },
     [ctx],
   );
 
   const handleUndo = useCallback(
     async (exerciseId: string) => {
-      const last = await ctx.entries.lastForExercise(exerciseId);
-      if (last !== undefined) await ctx.entries.remove(last.id);
+      try {
+        const last = await ctx.entries.lastForExercise(exerciseId);
+        if (last !== undefined) await ctx.entries.remove(last.id);
+        setWriteError(undefined);
+      } catch (error) {
+        setWriteError(error instanceof Error ? error.message : String(error));
+      }
     },
     [ctx],
   );
@@ -93,6 +112,12 @@ export function Today({ ctx }: TodayProps) {
           day {report?.elapsedDays ?? 1} of {report?.totalDays ?? 7}
         </span>
       </header>
+
+      {writeError === undefined ? null : (
+        <p class="error" role="alert" data-testid="write-error">
+          Could not save: {writeError}
+        </p>
+      )}
 
       {data.exercises.length === 0 ? (
         <p class="muted">No exercises yet.</p>
