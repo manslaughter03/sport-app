@@ -23,7 +23,11 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Pixel 7"] } }],
   webServer: {
-    command: "npm run build && npm run preview -- --port 4173 --strictPort",
+    // `--host 127.0.0.1` is not optional: `vite preview` otherwise binds to
+    // `localhost`, which can resolve to ::1 only, while Playwright polls the
+    // IPv4 address below. That mismatch shows up as a webServer timeout in CI
+    // and nowhere else.
+    command: "npm run build && npm run preview -- --host 127.0.0.1 --port 4173 --strictPort",
     url: "http://127.0.0.1:4173/sport-app/",
     reuseExistingServer: !process.env["CI"],
     timeout: 120_000,
