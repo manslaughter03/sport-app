@@ -85,7 +85,7 @@ come first.
 
 ## 3. Slice sequence
 
-Nine PR-sized slices. Each is independently reviewable and leaves `main` green.
+Ten PR-sized slices (S1–S10). Each is independently reviewable and leaves `main` green.
 Order matters: the domain slices have no UI dependency, so they land first and fast.
 
 | # | Slice | Branch | Depends on | Tests added |
