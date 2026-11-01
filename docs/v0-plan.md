@@ -73,7 +73,7 @@ come first.
 |---|---|---|
 | P1 | Create `main` from `docs/architecture`, **set it as the default branch** | Today the default branch is `docs/architecture`. `deploy.yml` triggers on `main` (§8) and a long-lived doc branch should not be the trunk. |
 | P2 | Enable branch protection on `main`: require PR + green CI, no direct pushes | Keeps the trunk deployable. This is what makes `Closes #N` meaningful. |
-| P3 | **Check repo visibility.** Pages on a *private* repo needs a paid plan | If the repo is private on a free account, the deploy job will fail at `deploy-pages`. Decide: make it public, or drop Pages from v0 and install via LAN. |
+| P3 | **Resolve repo visibility — CONFIRMED BLOCKER.** The repo is **private** (`api.github.com/repos/manslaughter03/sport-app` → 404 unauthenticated; only `git@` over SSH works). GitHub Pages on a private repo requires a paid plan | Decide before S10: make the repo public, upgrade, or drop Pages from v0 and install via LAN (architecture §6). **v0 can be fully usable without Pages** — S10 splits into "PWA works" (still needed) and "deployed to Pages" (deferrable). |
 | P4 | Confirm Node 22 LTS is the target (`.nvmrc`) | This sandbox has no Node, so CI is the source of truth for the first slices. Pin it in one place. |
 | P5 | Create the v0 issues from §4 so PRs can say `Closes #N` | One issue per slice. |
 
@@ -294,6 +294,11 @@ possible without a format change.
 
 **Goal:** installable on the S24, offline, auto-deployed. This is the slice that makes it real.
 
+> **Splits if P3 lands on "stay private":** S10a = manifest + service worker + offline + e2e
+> (install over LAN per architecture §6, v0 usable). S10b = `deploy.yml` + Pages (unblocked later,
+> no code change — only the workflow and the origin). Do **not** let the visibility decision hold
+> up S10a.
+
 Files: `vite.config.ts` (add `vite-plugin-pwa`), `src/sw.ts`, `public/icons/*`,
 `manifest` in Vite config, `.github/workflows/deploy.yml`, `playwright.config.ts`,
 `e2e/smoke.spec.ts`.
@@ -311,7 +316,8 @@ serves the app from cache; export downloads a file; empty-state renders.
 
 ## 5. v0 acceptance script (run on the S24, Pages URL)
 
-1. Open `https://<user>.github.io/sport-app/` in Chrome → **Add to Home screen** → launch from icon.
+1. Open the app in Chrome (Pages URL, or the LAN HTTPS URL if Pages is deferred — see P3) →
+   **Add to Home screen** → launch from the icon.
 2. Log `20` push-ups, then `15`, then `12`. Today shows `47`; the ring moves after each tap.
 3. Log `:60` core. Core shows `1 m 0 s`.
 4. Reload / kill Chrome / relaunch from the icon → `47` and `1 m 0 s` are still there.
@@ -329,7 +335,7 @@ All nine pass → **v0 shipped**. Any failure → the slice that owns it is not 
 
 | # | Risk | Mitigation |
 |---|---|---|
-| R1 | **Private repo + free account → `deploy-pages` fails.** | Resolve at P3, before S10. Fallback: LAN install (architecture §6). |
+| R1 | **Private repo → `deploy-pages` fails** (confirmed, see P3). | Resolve at P3 before S10. Fallback: LAN install (architecture §6) — v0 stays usable, only the "from the Pages URL" part slips. |
 | R2 | **`base` path wrong → installed PWA 404s.** Blank page is the classic symptom. | Set `base: "/sport-app/"` in S1, verify the built `index.html` asset URLs, and run the E2E against `vite preview` with the same base. |
 | R3 | **Stale service worker** serves an old `index.html` forever. | `registerType: "prompt"` + never cache `index.html` stale-first. Test by deploying twice in S10. |
 | R4 | **Android evicts site data** → all history gone. | Export in v0 (S9) + `storage.persist()` + the 14-day nudge. This is the highest-consequence risk in the whole project. |
@@ -365,7 +371,7 @@ Roughly **4–6 focused sessions** to the §5 script passing.
 ## 8. Definition of done (v0)
 
 - [ ] `main` is the default branch, protected, CI green (P1, P2).
-- [ ] §5 acceptance script passes on the S24 from the Pages URL.
+- [ ] §5 acceptance script passes on the S24 (from the Pages URL, or the LAN URL if P3 deferred it).
 - [ ] `npm run lint && npm run typecheck && npm run test && npm run build` clean.
 - [ ] Domain coverage ≥ 90 % lines; ~42 unit + ~12 integration + ~14 component + 4 e2e.
 - [ ] ESLint boundary rules active: `domain` imports nothing from `data`/`ui`, no clock in `domain`.
