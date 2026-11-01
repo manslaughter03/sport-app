@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import globals from "globals";
+import reactHooks from "eslint-plugin-react-hooks";
 
 export default tseslint.config(
   {
@@ -85,6 +86,17 @@ export default tseslint.config(
           message: "domain/ must not call Date.now(). Inject time as a parameter.",
         },
       ],
+    },
+  },
+
+  // Preact hooks share React's rules: the exhaustive-deps check is what catches
+  // a liveQuery subscription that never rebuilds when its inputs change.
+  {
+    files: ["src/ui/**/*.{ts,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: {
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
     },
   },
 

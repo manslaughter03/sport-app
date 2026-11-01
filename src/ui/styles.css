@@ -1,9 +1,13 @@
 :root {
   color-scheme: dark;
   --bg: #0f172a;
+  --surface: #1e293b;
   --fg: #e2e8f0;
   --muted: #94a3b8;
   --accent: #38bdf8;
+  --accent-soft: #0ea5e9;
+  --track: #334155;
+  --danger: #f87171;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
@@ -21,17 +25,160 @@ body {
 }
 
 .app {
-  padding: 1.5rem 1rem calc(1.5rem + env(safe-area-inset-bottom));
+  padding: 1.25rem 1rem calc(1.5rem + env(safe-area-inset-bottom));
   max-width: 32rem;
   margin: 0 auto;
 }
 
 h1 {
   font-size: 1.5rem;
-  margin: 0 0 0.25rem;
+  margin: 0;
 }
 
 .muted {
   color: var(--muted);
   font-size: 0.875rem;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.today__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.exercise-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.exercise-row {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  background: var(--surface);
+  border-radius: 1rem;
+  padding: 0.75rem;
+}
+
+/* --- ring ------------------------------------------------------------- */
+
+.ring {
+  position: relative;
+  flex: 0 0 96px;
+  width: 96px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+}
+
+.ring__track {
+  stroke: var(--track);
+}
+
+.ring__fill {
+  stroke: var(--accent);
+  transition: stroke-dasharray 180ms ease-out;
+}
+
+.ring[data-pace="done"] .ring__fill,
+.ring[data-pace="ahead"] .ring__fill {
+  stroke: #4ade80;
+}
+
+.ring[data-pace="behind"] .ring__fill {
+  stroke: var(--accent-soft);
+}
+
+.ring[data-pace="over-cap"] .ring__fill {
+  stroke: var(--danger);
+}
+
+.ring__value {
+  position: absolute;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+/* --- quick add -------------------------------------------------------- */
+
+.exercise {
+  flex: 1 1 auto;
+  min-width: 0;
+  list-style: none;
+}
+
+.exercise__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.exercise__name {
+  font-weight: 600;
+}
+
+.exercise__total {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.125rem;
+  color: var(--accent);
+}
+
+.exercise__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  background: #0b1220;
+  cursor: pointer;
+  min-height: 44px; /* comfortable tap target */
+  min-width: 52px;
+}
+
+.btn--add {
+  background: var(--accent-soft);
+  color: #04121f;
+  font-weight: 600;
+}
+
+.btn--add:active {
+  transform: translateY(1px);
+}
+
+.btn--undo {
+  background: transparent;
+  border-color: var(--track);
+  color: var(--muted);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
