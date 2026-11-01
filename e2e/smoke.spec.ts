@@ -102,6 +102,15 @@ test("installs a service worker and works offline after first load", async ({ pa
   await page.getByLabel("Add 10 reps to Push-up").click();
   await expect(page.getByTestId("total-ex-pushup")).toHaveText("10");
 
+  // A first-ever visit is not yet *controlled* by the active worker; one online
+  // load makes it so. Without this the offline reload below would test SW
+  // lifecycle timing rather than the app's offline support.
+  await page.reload({ waitUntil: "load" });
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, {
+    timeout: 15_000,
+  });
+  await expect(page.getByTestId("total-ex-pushup")).toHaveText("10");
+
   // Airplane mode.
   await context.setOffline(true);
   await page.reload();
