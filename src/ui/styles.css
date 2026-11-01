@@ -360,7 +360,7 @@ h1 {
   position: sticky;
   bottom: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.5rem;
   margin-top: 1.5rem;
   padding: 0.5rem 0 calc(0.5rem + env(safe-area-inset-bottom));
@@ -458,4 +458,48 @@ h1 {
   color: #4ade80;
   font-size: 0.8125rem;
   margin: 0.5rem 0 0;
+}
+
+/* --- backup screen ---------------------------------------------------- */
+
+.notice {
+  background: #422006;
+  border: 1px solid #a16207;
+  color: #fde68a;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  margin: 0.75rem 0;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.stats div {
+  background: var(--surface);
+  border-radius: 0.75rem;
+  padding: 0.625rem 0.5rem;
+  text-align: center;
+}
+
+.stats dt {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.stats dd {
+  margin: 0.25rem 0 0;
+  font-size: 1.125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn--wide {
+  width: 100%;
+  margin-top: 0.5rem;
 }

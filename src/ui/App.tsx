@@ -11,12 +11,13 @@ import type { AppContext } from "./app.ts";
 import { Today } from "./screens/Today.tsx";
 import { Progress } from "./screens/Progress.tsx";
 import { Targets } from "./screens/Targets.tsx";
+import { Backup } from "./screens/Backup.tsx";
 
 export interface AppProps {
   ctx: AppContext;
 }
 
-type Screen = "today" | "progress" | "targets";
+type Screen = "today" | "progress" | "targets" | "backup";
 
 export function App({ ctx }: AppProps) {
   const [screen, setScreen] = useState<Screen>("today");
@@ -26,6 +27,7 @@ export function App({ ctx }: AppProps) {
       {screen === "today" ? <Today ctx={ctx} /> : null}
       {screen === "progress" ? <Progress ctx={ctx} /> : null}
       {screen === "targets" ? <Targets ctx={ctx} /> : null}
+      {screen === "backup" ? <Backup ctx={ctx} /> : null}
 
       <nav class="nav" aria-label="Main">
         <button
@@ -51,6 +53,14 @@ export function App({ ctx }: AppProps) {
           onClick={() => setScreen("targets")}
         >
           Targets
+        </button>
+        <button
+          type="button"
+          class="nav__item"
+          aria-current={screen === "backup" ? "page" : undefined}
+          onClick={() => setScreen("backup")}
+        >
+          Backup
         </button>
       </nav>
     </main>
