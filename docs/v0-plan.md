@@ -62,6 +62,17 @@ CSV · stopwatch · body metrics · any network call.
 
 Naming these now is the point: each is a Phase 2 issue, not a v0 "while we're here".
 
+**Every deferred item now exists as a GitHub issue**, so nothing can be quietly forgotten:
+
+| Phase | Issues |
+|---|---|
+| 2 (next) | #12 monthly view · #13 pace badges · #14 history · **#15 import + merge** · #16 settings · #17 exercise management · #18 PWA storage/update |
+| 3 | #19 heatmap · #20 streaks · #21 CSV · #22 stopwatch |
+| 4 (optional) | #23 body metrics |
+
+**#15 is the highest priority of the lot**: export ships in v0, import does not, and a backup you
+cannot restore is not a backup.
+
 ---
 
 ## 2. Repository prerequisites (do these before any code)
@@ -383,6 +394,17 @@ S10 pwa+deploy   ██████░░░░   the risky one — real device,
 
 Critical path: **S1 → S2 → S3 → S4 → S5 → S6 → S10**. S7/S8/S9 are parallelisable off S6/S5.
 Roughly **4–6 focused sessions** to the §5 script passing.
+
+---
+
+## 7.1 Status
+
+**v0 shipped.** All ten slices merged (PRs #1–#11), 234 unit/integration tests, 8 e2e tests, and the
+deployed app verified end to end — including logging with the network fully cut.
+
+Live: <https://manslaughter03.github.io/sport-app/>
+
+Deferred work is tracked as issues #12–#23 (see §1).
 
 ---
 
