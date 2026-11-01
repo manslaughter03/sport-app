@@ -6,6 +6,8 @@ never leaves the phone.
 
 Status: **design document**, no code yet.
 
+Build plan for the first shippable version: [`v0-plan.md`](./v0-plan.md).
+
 ---
 
 ## 1. Decisions (settled)
@@ -318,13 +320,10 @@ manifest `start_url`/`scope` relative-aware, or the installed PWA breaks.
 
 ## 10. Open questions
 
-- **O1 — target vs cap.** You said "weekly volume cap/max". Is `target` *aspirational*
-  (140 % = great week) or a *ceiling* (140 % = warning)? The model supports both via
-  `Goal.cap`; default assumption is **aspirational volume target** with the cap available
-  per goal.
-- **O2 — both periods at once?** A push-up goal could be 300/week *and* 1200/month. Two
-  rows are already allowed; question is whether the UI shows both or one at a time.
-  Proposal: allow both, month as the long-arc view.
+- **O1 — target vs cap. SETTLED:** `target` is **aspirational** (`140 %` = great week, printed
+  unclamped). `Goal.cap` stays in the model for per-goal ceilings but no v0 goal uses it.
+- **O2 — both periods at once? SETTLED:** both rows are allowed (300/week *and* 1200/month). v0
+  ships the weekly surface; the monthly row is stored and evaluated, its screen is Phase 2.
 - **O3 — active-day threshold.** Default "≥1 entry that day". Should a single 1-rep entry
   count, or is there a minimum volume?
 - **O4 — partial-period display.** On the 2nd of the month, show "% of monthly target"
