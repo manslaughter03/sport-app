@@ -43,7 +43,9 @@ export function QuickAdd({ exercise, todayTotal, canUndo, onAdd, onUndo }: Quick
     <li class="exercise" data-testid={`exercise-${exercise.id}`}>
       <div class="exercise__head">
         <span class="exercise__name">{exercise.name}</span>
-        <span class="exercise__total">{formatAmountCompact(todayTotal, exercise.kind)}</span>
+        <span class="exercise__total" data-testid={`total-${exercise.id}`}>
+          {formatAmountCompact(todayTotal, exercise.kind)}
+        </span>
       </div>
 
       <div class="exercise__actions">

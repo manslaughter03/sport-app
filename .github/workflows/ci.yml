@@ -40,11 +40,54 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Verify base path
+      - name: Verify build artefacts
         # GitHub Pages serves this repo under /sport-app/. If `base` regresses,
-        # the deployed app 404s on its own assets (a blank page) — fail loudly here.
+        # the deployed app 404s on its own assets (a blank page) — fail loudly.
+        # The service worker and manifest must exist or the PWA silently isn't one.
         run: |
           grep -q 'src="/sport-app/assets/' dist/index.html || {
             echo "::error::dist/index.html does not reference /sport-app/ assets — check vite.config.ts base"
             exit 1
           }
+          test -f dist/manifest.webmanifest || {
+            echo "::error::manifest.webmanifest missing"
+            exit 1
+          }
+          test -f dist/sw.js || {
+            echo "::error::service worker missing"
+            exit 1
+          }
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      - name: Install Playwright (chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E smoke
+        run: npx playwright test
+
+      - name: Upload trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

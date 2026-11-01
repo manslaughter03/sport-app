@@ -14,6 +14,7 @@ import { createEntriesRepo } from "./data/repos/entries.ts";
 import { createGoalsRepo } from "./data/repos/goals.ts";
 import { createSettingsRepo } from "./data/repos/settings.ts";
 import { seedIfEmpty } from "./data/seed.ts";
+import { registerServiceWorker } from "./sw.ts";
 import "./ui/styles.css";
 
 const db = createDatabase();
@@ -42,6 +43,7 @@ async function start(): Promise<void> {
   }
 
   render(<App ctx={ctx} />, root!);
+  registerServiceWorker();
 }
 
 void start();
