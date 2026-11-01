@@ -1,9 +1,14 @@
+import type { AppContext } from "./app.ts";
 import { Today } from "./screens/Today.tsx";
 
-export function App() {
+export interface AppProps {
+  ctx: AppContext;
+}
+
+export function App({ ctx }: AppProps) {
   return (
     <main class="app">
-      <Today />
+      <Today ctx={ctx} />
     </main>
   );
 }
