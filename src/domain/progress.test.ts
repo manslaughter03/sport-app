@@ -51,6 +51,7 @@ function entry(exerciseId: string, day: string, amount: number): Entry {
     day,
     amount,
     createdAt: `${day}T12:00:00.000Z`,
+    seq: counter,
   };
 }
 
