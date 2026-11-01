@@ -19,3 +19,6 @@ test-results/
 
 # TypeScript incremental build artifacts
 *.tsbuildinfo
+
+# gh CLI cache (local)
+.gh-cache/
