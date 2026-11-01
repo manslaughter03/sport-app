@@ -1,0 +1,70 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege, plus exactly what Pages needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once; let the newest finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify base path
+        # A wrong base is a blank page on Pages, and the service worker would
+        # cache the blankness. Fail before uploading.
+        run: |
+          grep -q 'src="/sport-app/assets/' dist/index.html || {
+            echo "::error::dist/index.html does not reference /sport-app/ assets"
+            exit 1
+          }
+          test -f dist/manifest.webmanifest || {
+            echo "::error::manifest.webmanifest missing from the build"
+            exit 1
+          }
+          test -f dist/sw.js || {
+            echo "::error::service worker missing from the build"
+            exit 1
+          }
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

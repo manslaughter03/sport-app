@@ -22,3 +22,6 @@ test-results/
 
 # gh CLI cache (local)
 .gh-cache/
+
+# Playwright browsers (local install)
+.pw-browsers/

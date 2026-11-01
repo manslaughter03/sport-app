@@ -6,12 +6,13 @@
  * on a GitHub Pages subpath).
  */
 
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { AppContext } from "./app.ts";
 import { Today } from "./screens/Today.tsx";
 import { Progress } from "./screens/Progress.tsx";
 import { Targets } from "./screens/Targets.tsx";
 import { Backup } from "./screens/Backup.tsx";
+import { applyPendingUpdate, onUpdateAvailable } from "../sw.ts";
 
 export interface AppProps {
   ctx: AppContext;
@@ -21,6 +22,11 @@ type Screen = "today" | "progress" | "targets" | "backup";
 
 export function App({ ctx }: AppProps) {
   const [screen, setScreen] = useState<Screen>("today");
+  const [updateReady, setUpdateReady] = useState(false);
+
+  useEffect(() => {
+    onUpdateAvailable(setUpdateReady);
+  }, []);
 
   return (
     <main class="app">
@@ -28,6 +34,15 @@ export function App({ ctx }: AppProps) {
       {screen === "progress" ? <Progress ctx={ctx} /> : null}
       {screen === "targets" ? <Targets ctx={ctx} /> : null}
       {screen === "backup" ? <Backup ctx={ctx} /> : null}
+
+      {updateReady ? (
+        <div class="toast" role="status" data-testid="update-toast">
+          <span>Update ready</span>
+          <button type="button" class="btn btn--add" onClick={() => applyPendingUpdate()}>
+            Reload
+          </button>
+        </div>
+      ) : null}
 
       <nav class="nav" aria-label="Main">
         <button
