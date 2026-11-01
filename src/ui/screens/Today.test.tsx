@@ -244,3 +244,41 @@ describe("Today — weekly ring", () => {
     });
   });
 });
+
+describe("Today — write failures", () => {
+  it("surfaces a failed write instead of swallowing it", async () => {
+    renderToday();
+    await waitFor(() => expect(screen.getByText("Push-up")).toBeTruthy());
+
+    // Make the write fail the way a closed/evicted database would.
+    const realAdd = ctx.entries.addSet.bind(ctx.entries);
+    ctx.entries.addSet = async () => {
+      throw new Error("DatabaseClosedError");
+    };
+
+    fireEvent.click(screen.getByLabelText("Add 10 reps to Push-up"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("write-error").textContent).toContain("DatabaseClosedError");
+    });
+
+    ctx.entries.addSet = realAdd;
+  });
+
+  it("clears the error once a later write succeeds", async () => {
+    renderToday();
+    await waitFor(() => expect(screen.getByText("Push-up")).toBeTruthy());
+
+    const realAdd = ctx.entries.addSet.bind(ctx.entries);
+    ctx.entries.addSet = async () => {
+      throw new Error("transient");
+    };
+    fireEvent.click(screen.getByLabelText("Add 10 reps to Push-up"));
+    await waitFor(() => expect(screen.getByTestId("write-error")).toBeTruthy());
+
+    ctx.entries.addSet = realAdd;
+    fireEvent.click(screen.getByLabelText("Add 10 reps to Push-up"));
+
+    await waitFor(() => expect(screen.queryByTestId("write-error")).toBeNull());
+  });
+});

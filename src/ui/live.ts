@@ -21,6 +21,12 @@ export interface LiveState<T> {
  * the subscription is rebuilt. The latest `query` is held in a ref so the
  * subscription always calls the current closure without making `query` itself a
  * dependency (which would resubscribe on every render).
+ *
+ * Errors are caught *inside* the observable rather than left to reject. A query
+ * can fail because the database closed underneath it (component unmounting, a
+ * schema upgrade, Android evicting storage); an unhandled rejection there is
+ * noise at best and, in a test runner that treats them as failures, a red build
+ * with every assertion passing.
  */
 export function useLiveQuery<T>(
   query: () => Promise<T>,
@@ -32,19 +38,41 @@ export function useLiveQuery<T>(
   queryRef.current = query;
 
   useEffect(() => {
-    const subscription = liveQuery(() => queryRef.current()).subscribe({
-      next: (data) => setState({ data, error: undefined }),
-      error: (error: unknown) =>
-        setState({
-          data: undefined,
-          error: error instanceof Error ? error : new Error(String(error)),
-        }),
+    let cancelled = false;
+
+    const subscription = liveQuery(async () => {
+      try {
+        return { ok: true as const, value: await queryRef.current() };
+      } catch (error) {
+        return { ok: false as const, error: toError(error) };
+      }
+    }).subscribe({
+      next: (result) => {
+        if (cancelled) return;
+        setState(
+          result.ok
+            ? { data: result.value, error: undefined }
+            : { data: undefined, error: result.error },
+        );
+      },
+      error: (error: unknown) => {
+        if (cancelled) return;
+        setState({ data: undefined, error: toError(error) });
+      },
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
     // Generic hook: `deps` is the caller's list, which this rule cannot inspect
     // statically. Callers are responsible for listing what `query` closes over.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
   return state;
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
