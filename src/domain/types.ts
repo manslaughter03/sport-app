@@ -83,3 +83,70 @@ export interface Entry {
   readonly createdAt: IsoInstant;
   readonly note?: string;
 }
+
+/** Persisted app settings. Single row, `id = "app"`. */
+export interface Settings {
+  /** 1 = Monday (default), 7 = Sunday. */
+  readonly weekStartsOn: WeekStartsOn;
+  /** 0..6 — entries logged before this hour count for the previous day. */
+  readonly dayCutoffHour: number;
+  /** A day counts as "active" if its total for one exercise is >= this. */
+  readonly activeDayMinAmount: number;
+  readonly schemaVersion: number;
+  readonly lastExportAt?: IsoInstant;
+  readonly lastBackupNudgeAt?: IsoInstant;
+}
+
+/**
+ * Pace is a state, not a number (docs/architecture.md §3.2).
+ *
+ * `untargeted` covers an exercise with no goal in force: it still shows volume,
+ * it just cannot be "behind" anything.
+ */
+export type PaceState = "on-track" | "behind" | "ahead" | "done" | "over-cap" | "untargeted";
+
+/** Per-exercise progress within a period. */
+export interface ExerciseProgress {
+  readonly exerciseId: string;
+  readonly name: string;
+  readonly kind: ExerciseKind;
+  readonly unit: string;
+  /** Sum of amounts in the period. */
+  readonly achieved: number;
+  /** Goal target in force, or null when the exercise has no goal. */
+  readonly target: number | null;
+  /**
+   * Unclamped percentage — 140 is information, not an error.
+   * Null when there is no target.
+   */
+  readonly volumePct: number | null;
+  /** Clamped 0..100 for ring/bar width. */
+  readonly clampedPct: number;
+  /** What linear progress would expect by now (target × elapsedFraction). */
+  readonly expectedSoFar: number;
+  readonly pace: PaceState;
+  /** True only when a `cap: true` goal is exceeded. */
+  readonly overCap: boolean;
+  readonly goalId: string | null;
+}
+
+/** Global "did I show up?" progress. */
+export interface RegularityProgress {
+  readonly activeDays: number;
+  /** Null when there is no active-days goal in force. */
+  readonly activeDaysTarget: number | null;
+  readonly regularityPct: number | null;
+  /** The active days themselves, for the 7-day grid. */
+  readonly activeDayList: readonly IsoDate[];
+}
+
+/** The full answer for one period. */
+export interface ProgressReport {
+  readonly range: PeriodRange;
+  readonly today: IsoDate;
+  readonly totalDays: number;
+  readonly elapsedDays: number;
+  readonly elapsedFraction: number;
+  readonly exercises: readonly ExerciseProgress[];
+  readonly regularity: RegularityProgress;
+}
