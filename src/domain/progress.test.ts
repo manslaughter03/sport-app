@@ -342,3 +342,64 @@ describe("defensive guards", () => {
     expect(push?.clampedPct).toBe(0);
   });
 });
+
+describe("period-aware goal selection (#12)", () => {
+  // 700/week and 3000/month on the same exercise, the case O2 settled on.
+  const weekly = pushupGoal(700);
+  const monthly = pushupGoal(3000, { id: "g-push-month", period: "month" });
+  const march = { start: "2026-03-01", end: "2026-04-01" };
+
+  const amount = (n: number) => [entry(PUSHUP, "2026-03-04", n)];
+
+  it("selects the weekly goal for a week range", () => {
+    const report = evaluate(WEEK, amount(350), exercises, [weekly, monthly], settings, "2026-03-04");
+    const push = report.exercises.find((e) => e.exerciseId === PUSHUP);
+    expect(push?.target).toBe(700);
+    expect(push?.volumePct).toBe(50);
+  });
+
+  it("selects the monthly goal when told the period is a month", () => {
+    const report = evaluate(
+      march,
+      amount(1500),
+      exercises,
+      [weekly, monthly],
+      settings,
+      "2026-03-04",
+      "month",
+    );
+    const push = report.exercises.find((e) => e.exerciseId === PUSHUP);
+    expect(push?.target).toBe(3000);
+    expect(push?.volumePct).toBe(50);
+    expect(report.totalDays).toBe(31);
+  });
+
+  it("the same range read as a month ignores an unversioned weekly goal", () => {
+    // Without the `period` argument this would match the weekly row and report
+    // 1500/700 — the bug that made the month view need an engine change.
+    const asMonth = evaluate(march, amount(1500), exercises, [weekly], settings, "2026-03-04", "month");
+    const asWeek = evaluate(march, amount(1500), exercises, [weekly], settings, "2026-03-04");
+    expect(asMonth.exercises.find((e) => e.exerciseId === PUSHUP)?.target).toBeNull();
+    expect(asWeek.exercises.find((e) => e.exerciseId === PUSHUP)?.target).toBe(700);
+  });
+
+  it("selects the monthly active-days goal for month periods", () => {
+    const monthDays: Goal = { ...activeDaysGoal(12), id: "g-days-month", period: "month" };
+    const entries = [entry(PUSHUP, "2026-03-02", 20), entry(PUSHUP, "2026-03-03", 20)];
+
+    const asMonth = evaluate(march, entries, exercises, [activeDaysGoal(4), monthDays], settings, "2026-03-04", "month");
+    const asWeek = evaluate(WEEK, entries, exercises, [activeDaysGoal(4), monthDays], settings, "2026-03-04");
+
+    // 2 of 12 days on the month, 2 of 4 on the week: same days, different goal.
+    expect(asMonth.regularity.activeDaysTarget).toBe(12);
+    expect(asMonth.regularity.regularityPct).toBe(16.67);
+    expect(asWeek.regularity.activeDaysTarget).toBe(4);
+    expect(asWeek.regularity.regularityPct).toBe(50);
+  });
+
+  it("defaults to the week, so existing callers are unchanged", () => {
+    const explicit = evaluate(WEEK, [], exercises, [weekly, monthly], settings, "2026-03-04");
+    const implicit = evaluate(WEEK, [], exercises, [weekly, monthly], settings, "2026-03-04", "week");
+    expect(explicit.exercises.map((e) => e.target)).toEqual(implicit.exercises.map((e) => e.target));
+  });
+});

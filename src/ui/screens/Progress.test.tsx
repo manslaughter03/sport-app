@@ -3,6 +3,7 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   cleanup,
+  fireEvent,
   render as renderInto,
   screen,
   waitFor,
@@ -206,14 +207,13 @@ describe("Progress — partial period", () => {
 });
 
 describe("Progress — navigation", () => {
-  it("offers a week-only period switcher in v0", async () => {
+  it("offers a working week/month switcher, defaulting to week", async () => {
     renderProgress();
     await waitFor(() => expect(screen.getByTestId("period-switcher")).toBeTruthy());
     const week = screen.getByRole("button", { name: "Week" }) as HTMLButtonElement;
-    expect(week.getAttribute("aria-pressed")).toBe("true");
-    // Month exists but is disabled in v0 (Phase 2).
     const month = screen.getByRole("button", { name: "Month" }) as HTMLButtonElement;
-    expect(month.disabled).toBe(true);
+    expect(week.getAttribute("aria-pressed")).toBe("true");
+    expect(month.disabled).toBe(false);
   });
 
   it("renders without crashing when there are no exercises", async () => {
@@ -233,5 +233,87 @@ describe("Progress — navigation", () => {
     await waitFor(() =>
       expect(screen.getByTestId("volume-ex-pushup").textContent).toContain("50 %"),
     );
+  });
+});
+
+describe("Progress — month view (#12)", () => {
+  it("evaluates monthRange and says which day of the month it is", async () => {
+    renderProgress();
+    await waitFor(() => expect(screen.getByTestId("period-switcher")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Month" }));
+
+    // 2026-03-04 → day 4 of 31, not `day 3 of 7` and not a bare percentage.
+    await waitFor(() =>
+      expect(screen.getByTestId("day-position").textContent).toContain("4 of 31"),
+    );
+    expect(screen.getByTestId("month-grid")).toBeTruthy();
+    expect(screen.queryByTestId("day-grid")).toBeNull();
+  });
+
+  it("reports against the monthly goal, not the weekly one", async () => {
+    // Both rows coexist for push-ups: 700/week AND 3000/month.
+    await ctx.goals.create({
+      scope: { kind: "exercise", exerciseId: "ex-pushup" },
+      period: "month",
+      target: 3000,
+      cap: false,
+      effectiveFrom: "2026-01-01",
+    });
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 1500 });
+
+    renderProgress();
+    await waitFor(() =>
+      expect(screen.getByTestId("volume-ex-pushup").textContent).toContain("214.3 %"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Month" }));
+
+    // 1500 / 3000 = 50 % on the month, versus a clamped weekly reading before.
+    await waitFor(() =>
+      expect(screen.getByTestId("volume-ex-pushup").textContent).toContain("50 %"),
+    );
+    // The month's target is what the row is measured against. `formatAmountCompact`
+    // groups thousands with a thin space, so assert on the digits.
+    expect(screen.getByTestId("target-ex-pushup").textContent).toMatch(/3\s000/);
+  });
+
+  it("toggles back to the week without losing the screen", async () => {
+    renderProgress();
+    await waitFor(() => expect(screen.getByTestId("period-switcher")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Month" }));
+    await waitFor(() => expect(screen.getByTestId("month-grid")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Week" }));
+    await waitFor(() => expect(screen.getByTestId("day-grid")).toBeTruthy());
+    expect(screen.getByTestId("day-position").textContent).toContain("3 of 7");
+  });
+
+  it("marks each day of the month and honours a Sunday week start", async () => {
+    await ctx.settings.update({ weekStartsOn: 7 });
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 20, at: { day: "2026-03-01", hour: 12 } });
+
+    renderProgress();
+    await waitFor(() => expect(screen.getByTestId("period-switcher")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Month" }));
+
+    await waitFor(() => expect(screen.getByTestId("month-grid")).toBeTruthy());
+    // 2026-03-01 is a Sunday and an active day; 03-02 is neither.
+    expect(screen.getByTestId("month-cell-2026-03-01").getAttribute("data-active")).toBe("true");
+    expect(screen.getByTestId("month-cell-2026-03-02").getAttribute("data-active")).toBe("false");
+    expect(screen.getByTestId("month-cell-2026-03-04").getAttribute("data-today")).toBe("true");
+  });
+
+  it("shows every day of a 31-day month", async () => {
+    renderProgress();
+    await waitFor(() => expect(screen.getByTestId("period-switcher")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Month" }));
+
+    await waitFor(() => expect(screen.getByTestId("month-cell-2026-03-31")).toBeTruthy());
+    expect(screen.getByTestId("month-cell-2026-03-01")).toBeTruthy();
+    // February ends at 28 in 2026, so no cell may leak across the boundary.
+    expect(screen.queryByTestId("month-cell-2026-02-28")).toBeNull();
+    expect(screen.queryByTestId("month-cell-2026-04-01")).toBeNull();
   });
 });

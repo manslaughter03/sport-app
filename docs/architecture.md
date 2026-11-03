@@ -108,15 +108,27 @@ overall; per-exercise variants would let three goals disagree about what a good 
 Pure functions in `src/domain/`. Signature shape:
 
 ```ts
-evaluate(range: PeriodRange, entries: Entry[], goals: Goal[], settings: Settings)
+evaluate(range: PeriodRange, entries: Entry[], exercises: Exercise[],
+         goals: Goal[], settings: Settings, today: IsoDate,
+         period: Period = "week")
   : ProgressReport
 ```
+
+`range` says *when*, `period` says *which goal row to select*. They are separate
+because the same seven days can be read against a weekly target or as the first week of
+a monthly one, and the two report different percentages: a 700/week and a 3000/month row
+coexist for the same exercise (O2), so the selection cannot be inferred from the range
+alone. `period` defaults to `"week"`, which is correct for every caller that passes a week
+range.
 
 ### 3.1 Period ranges
 
 - `week`: `weekStartsOn` (default Monday) → `[start, end)` of 7 local days.
-- `month`: calendar month `[1st, 1st of next month)`.
-- Partial periods are normal: mid-week, `elapsedDays < periodDays`.
+- `month`: calendar month `[1st, 1st of next month)`, rendered as a calendar grid with
+  weekday columns derived from `weekStartsOn`.
+- Partial periods are normal: mid-week, `elapsedDays < periodDays`. Every surface prints
+  the position — `day 3 of 7`, `day 4 of 31` — so a small percentage is never read as
+  failure (O4).
 
 ### 3.2 Two percentages, two questions
 
