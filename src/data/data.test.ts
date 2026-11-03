@@ -591,3 +591,102 @@ describe("settings repo — defensive race branch", () => {
     expect(value.dayCutoffHour).toBe(0);
   });
 });
+
+describe("exercises repo — ordering and archiving (#17)", () => {
+  // This suite starts from an empty database, so these cases seed explicitly.
+  beforeEach(async () => {
+    await seedIfEmpty(db, fixedClock());
+  });
+
+  it("gives a new exercise the next free order", async () => {
+    const exercises = createExercisesRepo(db, fixedClock());
+    // Seeded rows sit at orders 1..3.
+    const next = await exercises.nextOrder();
+    expect(next).toBe(4);
+
+    const created = await exercises.create({
+      name: "Pull-up",
+      kind: "reps",
+      unit: "reps",
+      step: 1,
+      order: next,
+    });
+    expect(created.order).toBe(4);
+  });
+
+  it("moves an exercise and renumbers the rest without gaps or duplicates", async () => {
+    const exercises = createExercisesRepo(db, fixedClock());
+    const moved = await exercises.move("ex-toe-touch", 0);
+
+    expect(moved.map((e) => e.name)).toEqual(["Toe Touch", "Push-up", "Core"]);
+    // Contiguous 1..n: a gap would make `move` arithmetic drift over time.
+    expect(moved.map((e) => e.order)).toEqual([1, 2, 3]);
+
+    // Persisted, not just returned.
+    const relisted = await exercises.list();
+    expect(relisted.map((e) => e.name)).toEqual(["Toe Touch", "Push-up", "Core"]);
+  });
+
+  it("leaves every other exercise's order valid after a move", async () => {
+    const exercises = createExercisesRepo(db, fixedClock());
+    await exercises.move("ex-pushup", 2);
+
+    const ordered = await exercises.list();
+    expect(ordered.map((e) => e.name)).toEqual(["Core", "Toe Touch", "Push-up"]);
+    expect(new Set(ordered.map((e) => e.order)).size).toBe(ordered.length);
+  });
+
+  it("clamps a move past either end instead of dropping the exercise", async () => {
+    const exercises = createExercisesRepo(db, fixedClock());
+    const first = await exercises.move("ex-core", -5);
+    expect(first[0]?.name).toBe("Core");
+
+    const last = await exercises.move("ex-pushup", 99);
+    expect(last.at(-1)?.name).toBe("Push-up");
+    expect(await exercises.list()).toHaveLength(3);
+  });
+
+  it("refuses to move an archived exercise", async () => {
+    const exercises = createExercisesRepo(db, fixedClock());
+    await exercises.archive("ex-core");
+    await expect(exercises.move("ex-core", 0)).rejects.toThrow(/archived/i);
+  });
+
+  it("keeps an archived exercise's history queryable through the UI path", async () => {
+    const clock = fixedClock();
+    const exercises = createExercisesRepo(db, clock);
+    const settings = createSettingsRepo(db);
+    const entries = createEntriesRepo(db, clock, settings);
+
+    const created = await entries.addSet({ exerciseId: "ex-toe-touch", amount: 200 });
+    await exercises.archive("ex-toe-touch");
+
+    // Gone from Today's list, still present for history and export.
+    expect((await exercises.list()).some((e) => e.id === "ex-toe-touch")).toBe(false);
+    expect((await exercises.all()).some((e) => e.id === "ex-toe-touch")).toBe(true);
+    expect((await entries.forDayAndExercise(created.day, "ex-toe-touch")).length).toBeGreaterThan(0);
+  });
+
+  it("unarchiving puts an exercise back at its old position", async () => {
+    const exercises = createExercisesRepo(db, fixedClock());
+    await exercises.archive("ex-pushup");
+    expect((await exercises.list()).map((e) => e.name)).not.toContain("Push-up");
+
+    await exercises.unarchive("ex-pushup");
+    // `order` was never rewritten while archived, so the original slot is intact.
+    expect((await exercises.list()).map((e) => e.name)).toEqual(["Push-up", "Core", "Toe Touch"]);
+  });
+
+  it("a new exercise has no goal, so it reads as untargeted rather than NaN", () => {
+    // The UI half of this is in Targets.test.tsx; here it is only the shape.
+    const exercise = {
+      id: "ex-new",
+      name: "Pull-up",
+      kind: "reps" as const,
+      unit: "reps",
+      step: 1,
+      order: 9,
+    };
+    expect(exercise).not.toHaveProperty("goal");
+  });
+});

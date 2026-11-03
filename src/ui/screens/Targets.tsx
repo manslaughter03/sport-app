@@ -17,6 +17,7 @@
 import { useCallback, useMemo, useState } from "preact/hooks";
 import type { AppContext } from "../app.ts";
 import { useLiveQuery } from "../live.ts";
+import { ExerciseManager } from "../components/ExerciseManager.tsx";
 import { formatAmountCompact } from "../../domain/format.ts";
 import type { Exercise, Goal, IsoDate, Settings, WeekStartsOn } from "../../domain/types.ts";
 
@@ -26,6 +27,8 @@ export interface TargetsProps {
 
 interface TargetsData {
   exercises: Exercise[];
+  /** Every exercise, archived included: the manager needs both lists. */
+  allExercises: Exercise[];
   goals: Goal[];
   settings: Settings;
   today: IsoDate;
@@ -49,8 +52,12 @@ export function Targets({ ctx }: TargetsProps) {
     async () => {
       const now = ctx.clock.now();
       const settingsRow = await ctx.settings.get();
-      const [exercises, goals] = await Promise.all([ctx.exercises.list(), ctx.goals.all()]);
-      return { exercises, goals, settings: settingsRow, today: now.day };
+      const [exercises, allExercises, goals] = await Promise.all([
+        ctx.exercises.list(),
+        ctx.exercises.all(),
+        ctx.goals.all(),
+      ]);
+      return { exercises, allExercises, goals, settings: settingsRow, today: now.day };
     },
     [ctx],
   );
@@ -323,6 +330,14 @@ export function Targets({ ctx }: TargetsProps) {
           );
         })}
       </ul>
+
+      <ExerciseManager
+        ctx={ctx}
+        exercises={data.exercises}
+        archived={data.allExercises.filter(
+          (exercise) => exercise.archivedAt !== undefined,
+        )}
+      />
 
       <h2 class="section-title" id="settings-heading">
         Settings

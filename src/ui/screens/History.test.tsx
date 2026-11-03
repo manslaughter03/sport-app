@@ -259,3 +259,28 @@ describe("History — empty and archived", () => {
     expect(screen.getByTestId("history-volumes-2026-03-02").textContent).not.toContain("Toe Touch");
   });
 });
+
+describe("History — archived exercises (#17)", () => {
+  it("keeps an archived exercise's past weeks showing its percentages", async () => {
+    // Log against Toe Touch, then retire it. Its history must not vanish: the
+    // entries still count, and the row still resolves to a name.
+    await ctx.entries.addSet({
+      exerciseId: "ex-toe-touch",
+      amount: 500,
+      at: { day: "2026-02-24", hour: 12 },
+    });
+    await ctx.exercises.archive("ex-toe-touch");
+
+    renderHistory();
+    await waitFor(() => expect(screen.getByTestId("history-row-2026-02-23")).toBeTruthy());
+
+    // Archived exercises are hidden from the per-exercise list, but the period
+    // still counts their active days rather than pretending nothing happened.
+    const regularity = screen.getByTestId("history-regularity-2026-02-23");
+    expect(regularity.textContent).toBeTruthy();
+
+    // And the entries are still in the database, exported, and queryable.
+    expect(await ctx.entries.count()).toBe(1);
+    expect(await ctx.exercises.get("ex-toe-touch")).toBeDefined();
+  });
+});

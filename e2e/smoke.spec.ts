@@ -59,6 +59,32 @@ test("progress screen shows volume and regularity", async ({ page }) => {
   await expect(page.getByTestId("day-position")).toContainText("of 7");
 });
 
+test("adds, reorders and archives an exercise", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Targets" }).click();
+
+  // Add: the new row appears on Targets and on Today, with no goal.
+  await page.getByTestId("new-exercise-name").fill("Pull-up");
+  await page.getByTestId("add-exercise-save").click();
+  await expect(page.getByTestId("exercise-notice")).toContainText("Pull-up");
+
+  await page.getByRole("button", { name: "Today" }).click();
+  await expect(page.getByText("Pull-up")).toBeVisible();
+
+  // Reorder: Pull-up is last, so move it up once and it stops being last.
+  await page.getByRole("button", { name: "Targets" }).click();
+  const manageRows = page.getByTestId("exercise-manager-list").locator("li");
+  await expect(manageRows.nth(3)).toContainText("Pull-up");
+  await page.getByRole("button", { name: "Move Pull-up up" }).click();
+  await expect(manageRows.nth(2)).toContainText("Pull-up");
+
+  // Archive: gone from Today, kept in the archived list.
+  await page.getByRole("button", { name: "Archive", exact: true }).last().click();
+  await expect(page.getByTestId("archived-list")).toBeVisible();
+  await page.getByRole("button", { name: "Today" }).click();
+  await expect(page.getByText("Pull-up")).toHaveCount(0);
+});
+
 test("targets editor changes the target for this week", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Targets" }).click();

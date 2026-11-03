@@ -413,3 +413,137 @@ describe("Targets — settings (#16)", () => {
     await waitFor(async () => expect((await ctx.settings.get()).weekStartsOn).toBe(7));
   });
 });
+
+describe("Targets — exercise management (#17)", () => {
+  it("lists every non-archived exercise in display order", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("exercise-manager-list")).toBeTruthy());
+
+    const names = screen
+      .getAllByTestId(/^manage-/)
+      .map((row) => row.textContent ?? "");
+    expect(names[0]).toContain("Push-up");
+    expect(names[1]).toContain("Core");
+    expect(names[2]).toContain("Toe Touch");
+  });
+
+  it("adds an exercise which then gets a target row", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("new-exercise-name")).toBeTruthy());
+
+    fireEvent.input(screen.getByTestId("new-exercise-name"), { target: { value: "Pull-up" } });
+    fireEvent.click(screen.getByTestId("add-exercise-save"));
+
+    await waitFor(() => expect(screen.getByTestId("exercise-notice")).toBeTruthy());
+    expect(screen.getByTestId("exercise-notice").textContent).toContain("Pull-up");
+
+    const created = (await ctx.exercises.list()).find((e) => e.name === "Pull-up");
+    expect(created).toBeDefined();
+    expect(created?.kind).toBe("reps");
+    expect(created?.step).toBe(10);
+
+    // It appears as a target row with no target, never `NaN` or `0 %`.
+    await waitFor(() => expect(screen.getByTestId(`target-input-${created!.id}`)).toBeTruthy());
+    expect(inputFor(`target-input-${created!.id}`).value).toBe("");
+    expect(screen.queryByText("NaN")).toBeNull();
+  });
+
+  it("creates a duration exercise with second-based defaults", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("new-exercise-name")).toBeTruthy());
+
+    fireEvent.input(screen.getByTestId("new-exercise-name"), { target: { value: "Plank" } });
+    fireEvent.change(screen.getByTestId("new-exercise-kind"), { target: { value: "duration" } });
+    fireEvent.click(screen.getByTestId("add-exercise-save"));
+
+    await waitFor(() => expect(screen.getByTestId("exercise-notice")).toBeTruthy());
+    const created = (await ctx.exercises.list()).find((e) => e.name === "Plank");
+    expect(created?.kind).toBe("duration");
+    expect(created?.unit).toBe("s");
+    expect(created?.step).toBe(30);
+  });
+
+  it("does not create an exercise with no goal", async () => {
+    const goalsBefore = (await ctx.goals.all()).length;
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("new-exercise-name")).toBeTruthy());
+
+    fireEvent.input(screen.getByTestId("new-exercise-name"), { target: { value: "Pull-up" } });
+    fireEvent.click(screen.getByTestId("add-exercise-save"));
+
+    await waitFor(() => expect(screen.getByTestId("exercise-notice")).toBeTruthy());
+    expect((await ctx.goals.all()).length).toBe(goalsBefore);
+  });
+
+  it("rejects an empty name without creating anything", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("new-exercise-name")).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("add-exercise-save"));
+
+    await waitFor(() => expect(screen.getByTestId("exercise-error")).toBeTruthy());
+    expect(screen.getByTestId("exercise-error").textContent).toMatch(/name/i);
+    expect(await ctx.exercises.list()).toHaveLength(3);
+  });
+
+  it("moves an exercise down and the order persists", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("move-down-ex-pushup")).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("move-down-ex-pushup"));
+
+    await waitFor(async () => {
+      const names = (await ctx.exercises.list()).map((e) => e.name);
+      expect(names).toEqual(["Core", "Push-up", "Toe Touch"]);
+    });
+  });
+
+  it("disables the arrows at the ends of the list", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("move-up-ex-pushup")).toBeTruthy());
+
+    expect((screen.getByTestId("move-up-ex-pushup") as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId("move-down-ex-pushup") as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByTestId("move-down-ex-toe-touch") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("never offers a delete", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("exercise-manager-list")).toBeTruthy());
+    expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();
+  });
+
+  it("archives an exercise, keeps its history, and offers to restore it", async () => {
+    await ctx.entries.addSet({ exerciseId: "ex-toe-touch", amount: 500 });
+
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("archive-ex-toe-touch")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("archive-ex-toe-touch"));
+
+    await waitFor(async () =>
+      expect((await ctx.exercises.get("ex-toe-touch"))?.archivedAt).toBeTruthy(),
+    );
+    // The notice says history is kept: "archive" could read as "delete".
+    expect(screen.getByTestId("exercise-notice").textContent).toMatch(/history is kept/i);
+
+    // Gone from Today's list, moved to the archived section, entries untouched.
+    await waitFor(() => expect(screen.getByTestId("archived-ex-toe-touch")).toBeTruthy());
+    expect(screen.queryByTestId("manage-ex-toe-touch")).toBeNull();
+    expect(screen.queryByTestId("target-input-ex-toe-touch")).toBeNull();
+    expect(await ctx.entries.count()).toBe(1);
+  });
+
+  it("restores an archived exercise to its old position", async () => {
+    await ctx.exercises.archive("ex-core");
+
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("unarchive-ex-core")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("unarchive-ex-core"));
+
+    await waitFor(async () => {
+      const names = (await ctx.exercises.list()).map((e) => e.name);
+      expect(names).toEqual(["Push-up", "Core", "Toe Touch"]);
+    });
+    expect(screen.getByTestId("exercise-notice").textContent).toContain("Core");
+  });
+});
