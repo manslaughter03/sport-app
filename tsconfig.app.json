@@ -21,7 +21,10 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
 
-    "types": ["vite/client", "vite-plugin-pwa/client"]
+    // `node` is here for the build-output test (e2e/pwa-build.test.ts), which
+    // reads dist/sw.js. Application code never imports node builtins and the
+    // ESLint boundary rules keep it that way.
+    "types": ["vite/client", "vite-plugin-pwa/client", "node"]
   },
   "include": ["src", "e2e"]
 }

@@ -15,6 +15,7 @@ import { createGoalsRepo } from "./data/repos/goals.ts";
 import { createSettingsRepo } from "./data/repos/settings.ts";
 import { seedIfEmpty } from "./data/seed.ts";
 import { registerServiceWorker } from "./sw.ts";
+import { requestPersistence } from "./data/storage.ts";
 import "./ui/styles.css";
 
 const db = createDatabase();
@@ -33,14 +34,10 @@ async function start(): Promise<void> {
   // First run only: idempotent, never overwrites edits.
   await seedIfEmpty(db, clock);
 
-  // Best effort against Android evicting site data (architecture §5.3).
-  if (navigator.storage?.persist) {
-    try {
-      await navigator.storage.persist();
-    } catch {
-      // Persistence is a nice-to-have; never block startup on it.
-    }
-  }
+  // Best effort against Android evicting site data (architecture §5.3). The
+  // outcome is not discarded any more: the Backup screen reads it back with
+  // `navigator.storage.persisted()` and tells the user the truth (issue #18).
+  await requestPersistence(navigator.storage);
 
   render(<App ctx={ctx} />, root!);
   registerServiceWorker();

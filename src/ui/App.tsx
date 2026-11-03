@@ -14,6 +14,7 @@ import { History } from "./screens/History.tsx";
 import { Targets } from "./screens/Targets.tsx";
 import { Backup } from "./screens/Backup.tsx";
 import { applyPendingUpdate, onUpdateAvailable } from "../sw.ts";
+import { captureInstallPrompt, markInstalled, type InstallPromptEvent } from "./install.ts";
 
 export interface AppProps {
   ctx: AppContext;
@@ -27,6 +28,30 @@ export function App({ ctx }: AppProps) {
 
   useEffect(() => {
     onUpdateAvailable(setUpdateReady);
+  }, []);
+
+  // Capture the one-shot install event so the Backup screen can offer an
+  // explicit button instead of relying on the browser menu (issue #18).
+  useEffect(() => {
+    // Already installed (standalone display mode): never offer it again.
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      markInstalled();
+      return;
+    }
+
+    const onBeforeInstall = (event: Event) => {
+      captureInstallPrompt(event as InstallPromptEvent);
+    };
+    const onInstalled = () => {
+      markInstalled();
+    };
+
+    window.addEventListener("beforeinstallprompt", onBeforeInstall);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstall);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
   }, []);
 
   return (

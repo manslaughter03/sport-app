@@ -312,6 +312,18 @@ of entries.
   "Update ready — Reload". No auto-`skipWaiting` while someone is mid-entry.
 - Offline after first load: assets precached, data in IndexedDB → the phone needs the
   network exactly once per version.
+- The prompt model is a property of the **build output**, not of the config (`#18`): the
+  generated `sw.js` reaches `skipWaiting()` only from the `SKIP_WAITING` message, and never
+  calls `clients()` or `clientsClaim`. `e2e/pwa-build.test.ts` asserts exactly that against
+  `dist/sw.js`, and CI runs it after `build` — it is the only test that can fail on a
+  workbox option change rather than on application code.
+- **Storage protection is reported, never assumed** (`src/data/storage.ts`). `persist()` is
+  requested at startup and the result is read back with `persisted()`; the Backup screen
+  renders one of three sentences: protected, not protected (pointing at export), or "this
+  browser cannot say". An unknown is never rendered as protection.
+- `beforeinstallprompt` is captured and replayed on an explicit **Install** button. The event
+  is single-use, so it is dropped before `prompt()` resolves; a dismissal is not an error, it
+  just stops the offer. Installed standalone mode never offers it at all.
 
 ---
 

@@ -335,3 +335,116 @@ describe("Backup import", () => {
     expect(screen.getByTestId("import-details").textContent).toContain("re-numbered");
   });
 });
+
+describe("Backup — storage persistence (#18)", () => {
+  /** jsdom has no StorageManager, so each case installs its own. */
+  function stubStorage(manager: Partial<StorageManager> | undefined) {
+    Object.defineProperty(navigator, "storage", {
+      value: manager,
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  afterEach(() => {
+    stubStorage(undefined);
+  });
+
+  it("says plainly when storage is protected", async () => {
+    stubStorage({ persist: async () => true, persisted: async () => true });
+
+    renderBackup();
+    await waitFor(() => expect(screen.getByTestId("persistence")).toBeTruthy());
+
+    const node = screen.getByTestId("persistence");
+    expect(node.getAttribute("data-state")).toBe("persisted");
+    expect(node.textContent).toMatch(/protected from eviction/i);
+  });
+
+  it("says plainly when it is NOT protected, and points at the export", async () => {
+    // The accurate-but-uncomfortable case: claiming protection here would be a
+    // lie that costs the user their history.
+    stubStorage({ persisted: async () => false });
+
+    renderBackup();
+    await waitFor(() => expect(screen.getByTestId("persistence")).toBeTruthy());
+
+    const node = screen.getByTestId("persistence");
+    expect(node.getAttribute("data-state")).toBe("best-effort");
+    expect(node.textContent).toMatch(/not protected/i);
+    expect(node.textContent).toMatch(/export/i);
+  });
+
+  it("does not claim protection when the browser cannot report it", async () => {
+    stubStorage(undefined);
+
+    renderBackup();
+    await waitFor(() => expect(screen.getByTestId("persistence")).toBeTruthy());
+    expect(screen.getByTestId("persistence").getAttribute("data-state")).toBe("unavailable");
+    expect(screen.getByTestId("persistence").textContent).not.toMatch(/protected from eviction/i);
+  });
+
+  it("shows how much space the origin is using when the browser will say", async () => {
+    stubStorage({
+      persisted: async () => true,
+      estimate: async () => ({ usage: 1_500_000, quota: 100_000_000 }),
+    });
+
+    renderBackup();
+    await waitFor(() => expect(screen.getByTestId("storage-usage")).toBeTruthy());
+    expect(screen.getByTestId("storage-usage").textContent).toContain("1.4 MB");
+    expect(screen.getByTestId("storage-usage").textContent).toContain("2 %");
+  });
+
+  it("omits the usage line rather than inventing a number", async () => {
+    stubStorage({ persisted: async () => true, estimate: async () => ({}) });
+
+    renderBackup();
+    await waitFor(() => expect(screen.getByTestId("persistence")).toBeTruthy());
+    expect(screen.queryByTestId("storage-usage")).toBeNull();
+  });
+});
+
+describe("Backup — install prompt (#18)", () => {
+  it("offers an Install button only after the browser fired the event", async () => {
+    renderBackup();
+    await waitFor(() => expect(screen.getByTestId("export")).toBeTruthy());
+    expect(screen.queryByTestId("install")).toBeNull();
+  });
+
+  it("installs when the captured prompt is replayed", async () => {
+    const { captureInstallPrompt, resetInstallPrompt } = await import("../install.ts");
+    const prompt = vi.fn(async () => undefined);
+    captureInstallPrompt({
+      preventDefault: () => undefined,
+      prompt,
+      userChoice: Promise.resolve({ outcome: "accepted" as const }),
+    } as never);
+
+    renderBackup();
+    await waitFor(() => expect(screen.getByTestId("install")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("install"));
+
+    await waitFor(() => expect(prompt).toHaveBeenCalledTimes(1));
+    // Spent, so the control goes away rather than being tappable twice.
+    await waitFor(() => expect(screen.queryByTestId("install")).toBeNull());
+    resetInstallPrompt();
+  });
+});
+
+describe("formatBytes", () => {
+  it("uses believable units", async () => {
+    const { formatBytes } = await import("./Backup.tsx");
+    expect(formatBytes(0)).toBe("0 B");
+    expect(formatBytes(900)).toBe("900 B");
+    expect(formatBytes(1024)).toBe("1.0 kB");
+    expect(formatBytes(1_500_000)).toBe("1.4 MB");
+    expect(formatBytes(5_000_000_000)).toBe("4.7 GB");
+  });
+
+  it("never renders a negative or NaN size", async () => {
+    const { formatBytes } = await import("./Backup.tsx");
+    expect(formatBytes(Number.NaN)).toBe("—");
+    expect(formatBytes(-1)).toBe("—");
+  });
+});
