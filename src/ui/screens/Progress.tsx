@@ -1,20 +1,35 @@
 /**
- * Progress — "did I do the work?" and "did I show up?" on one screen (S7).
+ * Progress — "did I do the work?" and "did I show up?" on one screen (S7, #12).
  *
  * Reads through `liveQuery`, so logging a set on Today updates this screen too.
- * The `day X of 7` line is deliberate: a 10 % reading on day 3 is not failure,
- * and without the position it reads like one (plan §0, O4).
+ * The `day X of N` line is deliberate: a 10 % reading on day 3 is not failure,
+ * and without the position it reads like one (plan §0, O4). It is why the month
+ * view says `day 3 of 31` rather than a bare percentage.
+ *
+ * Week and month are two readings of the same stored data, so the selected
+ * period is component state and the query depends on it. The period is in the
+ * `liveQuery` dependency list on purpose: forgetting it is the classic way for a
+ * screen to keep showing the old range after a toggle.
  */
 
-import { useMemo } from "preact/hooks";
+import { useMemo, useState } from "preact/hooks";
 import type { AppContext } from "../app.ts";
 import { useLiveQuery } from "../live.ts";
 import { DayGrid } from "../components/DayGrid.tsx";
+import { MonthGrid } from "../components/MonthGrid.tsx";
 import { PeriodSwitcher } from "../components/PeriodSwitcher.tsx";
-import { evaluate } from "../../domain/progress.ts";
-import { daysIn, weekRange } from "../../domain/period.ts";
+import { evaluate, rangeForPeriod } from "../../domain/progress.ts";
+import { daysIn } from "../../domain/period.ts";
 import { formatAmountCompact, formatPercentRounded } from "../../domain/format.ts";
-import type { Entry, Exercise, Goal, IsoDate, Settings, WeekStartsOn } from "../../domain/types.ts";
+import type {
+  Entry,
+  Exercise,
+  Goal,
+  IsoDate,
+  Period,
+  Settings,
+  WeekStartsOn,
+} from "../../domain/types.ts";
 
 export interface ProgressProps {
   ctx: AppContext;
@@ -25,20 +40,23 @@ interface ProgressData {
   entries: Entry[];
   goals: Goal[];
   settings: Settings;
-  week: { start: IsoDate; end: IsoDate };
+  range: { start: IsoDate; end: IsoDate };
   today: IsoDate;
   weekStartsOn: WeekStartsOn;
+  period: Period;
 }
 
 export function Progress({ ctx }: ProgressProps) {
+  const [period, setPeriod] = useState<Period>("week");
+
   const { data, error } = useLiveQuery<ProgressData>(
     async () => {
       const settingsRow = await ctx.settings.get();
       const now = ctx.clock.now();
-      const week = weekRange(now.day, settingsRow.weekStartsOn);
+      const range = rangeForPeriod(period, now.day, settingsRow.weekStartsOn);
       const [exercises, entries, goals] = await Promise.all([
         ctx.exercises.list(),
-        ctx.entries.inRange(week),
+        ctx.entries.inRange(range),
         ctx.goals.all(),
       ]);
       return {
@@ -46,17 +64,28 @@ export function Progress({ ctx }: ProgressProps) {
         entries,
         goals,
         settings: settingsRow,
-        week,
+        range,
         today: now.day,
         weekStartsOn: settingsRow.weekStartsOn,
+        period,
       };
     },
-    [ctx],
+    // `period` belongs here: without it the query never rebuilds and the screen
+    // keeps reporting the old range after a toggle.
+    [ctx, period],
   );
 
   const report = useMemo(() => {
     if (data === undefined) return undefined;
-    return evaluate(data.week, data.entries, data.exercises, data.goals, data.settings, data.today);
+    return evaluate(
+      data.range,
+      data.entries,
+      data.exercises,
+      data.goals,
+      data.settings,
+      data.today,
+      data.period,
+    );
   }, [data]);
 
   if (error !== undefined) {
@@ -79,8 +108,9 @@ export function Progress({ ctx }: ProgressProps) {
     );
   }
 
-  const days = daysIn(data.week);
+  const days = daysIn(data.range);
   const regularity = report.regularity;
+  const isMonth = period === "month";
 
   return (
     <section class="progress">
@@ -91,7 +121,7 @@ export function Progress({ ctx }: ProgressProps) {
         </span>
       </header>
 
-      <PeriodSwitcher period="week" onChange={() => undefined} monthEnabled={false} />
+      <PeriodSwitcher period={period} onChange={setPeriod} monthEnabled />
 
       <div class="card" data-testid="regularity">
         <div class="card__head">
@@ -105,10 +135,19 @@ export function Progress({ ctx }: ProgressProps) {
             ? `${regularity.activeDays} active days`
             : `${regularity.activeDays} of ${regularity.activeDaysTarget} days`}
         </p>
-        <DayGrid days={days} activeDays={regularity.activeDayList} today={data.today} />
+        {isMonth ? (
+          <MonthGrid
+            days={days}
+            activeDays={regularity.activeDayList}
+            today={data.today}
+            weekStartsOn={data.weekStartsOn}
+          />
+        ) : (
+          <DayGrid days={days} activeDays={regularity.activeDayList} today={data.today} />
+        )}
       </div>
 
-      <h2 class="section-title">Volume</h2>
+      <h2 class="section-title">Volume · {isMonth ? "this month" : "this week"}</h2>
       <ul class="volume-list">
         {report.exercises.map((row) => (
           <li key={row.exerciseId} class="volume-row" data-testid={`volume-row-${row.exerciseId}`}>

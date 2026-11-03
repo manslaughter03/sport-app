@@ -13,7 +13,14 @@
 
 import { clampPct } from "./format.ts";
 import { activeGoals, goalInForce } from "./goals.ts";
-import { elapsedFraction as fractionElapsed, isInRange, periodDays, daysIn } from "./period.ts";
+import {
+  elapsedFraction as fractionElapsed,
+  isInRange,
+  periodDays,
+  daysIn,
+  monthRange,
+  weekRange,
+} from "./period.ts";
 import type {
   Entry,
   Exercise,
@@ -21,6 +28,7 @@ import type {
   Goal,
   IsoDate,
   PaceState,
+  Period,
   PeriodRange,
   ProgressReport,
   RegularityProgress,
@@ -152,11 +160,12 @@ function regularityProgress(
   goals: readonly Goal[],
   settings: Settings,
   day: IsoDate,
+  period: Period,
 ): RegularityProgress {
   const activeDayList = activeDaysOf(entries, range, settings);
   const activeDays = activeDayList.length;
 
-  const goal = goalInForce(goals, { kind: "activeDays" }, "week", range.end);
+  const goal = goalInForce(goals, { kind: "activeDays" }, period, range.end);
   const activeDaysTarget = goal?.target ?? null;
   const regularityPct =
     activeDaysTarget === null || activeDaysTarget <= 0
@@ -184,6 +193,15 @@ export function evaluate(
   goals: readonly Goal[],
   settings: Settings,
   today: IsoDate,
+  /**
+   * Which goal row to select — `week` (default) or `month`.
+   *
+   * The range says *when*, this says *which goal*: the same 7 days can be read
+   * against a weekly target or as the first week of a monthly one, and the two
+   * report different percentages. Defaulting to `week` keeps every existing
+   * caller correct, because a week range is by definition a weekly reading.
+   */
+  period: Period = "week",
 ): ProgressReport {
   const totals = totalsByExercise(entries, range);
   const elapsed = fractionElapsed(range, today);
@@ -199,7 +217,7 @@ export function evaluate(
     exerciseProgress(
       exercise,
       totals.get(exercise.id) ?? 0,
-      goalInForce(goals, { kind: "exercise", exerciseId: exercise.id }, "week", range.end),
+      goalInForce(goals, { kind: "exercise", exerciseId: exercise.id }, period, range.end),
       elapsed,
     ),
   );
@@ -211,7 +229,7 @@ export function evaluate(
     elapsedDays,
     elapsedFraction: elapsed,
     exercises: rows,
-    regularity: regularityProgress(entries, range, goals, settings, today),
+    regularity: regularityProgress(entries, range, goals, settings, today, period),
   };
 }
 
@@ -226,8 +244,21 @@ export function evaluatePeriods(
   goals: readonly Goal[],
   settings: Settings,
   today: IsoDate,
+  period: Period = "week",
 ): ProgressReport[] {
-  return ranges.map((range) => evaluate(range, entries, exercises, goals, settings, today));
+  return ranges.map((range) => evaluate(range, entries, exercises, goals, settings, today, period));
+}
+
+/**
+ * The range for a period kind, anchored on `anchor` — re-exported from `period`
+ * so a screen holding a `Period` needs one import, not two.
+ */
+export function rangeForPeriod(
+  period: Period,
+  anchor: IsoDate,
+  weekStartsOn: Settings["weekStartsOn"],
+): PeriodRange {
+  return period === "week" ? weekRange(anchor, weekStartsOn) : monthRange(anchor);
 }
 
 /** The days of the period that are still ahead, for the 7-day grid. */

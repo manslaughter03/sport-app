@@ -299,6 +299,51 @@ h1 {
   opacity: 0.45;
 }
 
+/* --- month grid -------------------------------------------------------- */
+
+.month-grid {
+  margin-top: 0.75rem;
+}
+
+.month-grid__head,
+.month-grid__cells {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+}
+
+.month-grid__cells {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+}
+
+.month-grid__weekday {
+  text-align: center;
+  font-size: 0.6875rem;
+  color: var(--muted);
+}
+
+.day-cell--date {
+  gap: 0.125rem;
+  padding: 0.25rem 0;
+}
+
+.day-cell--blank {
+  background: transparent;
+}
+
+.day-cell__date {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.day-cell[data-active="true"] .day-cell__date {
+  color: var(--fg);
+  font-weight: 600;
+}
+
 /* --- volume rows ------------------------------------------------------ */
 
 .volume-list {

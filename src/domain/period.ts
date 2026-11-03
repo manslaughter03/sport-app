@@ -118,6 +118,11 @@ export function diffDays(a: IsoDate, b: IsoDate): number {
   return toDayNumber(parseIsoDate(a)) - toDayNumber(parseIsoDate(b));
 }
 
+/** The calendar month (1..12) an ISO day falls in. */
+export function monthOf(iso: IsoDate): number {
+  return parseIsoDate(iso).month;
+}
+
 /** ISO weekday number: 1 = Monday … 7 = Sunday. */
 export function dayOfWeek(iso: IsoDate): number {
   // Day 0 (1970-01-01) was a Thursday, which is 4 in ISO numbering.
