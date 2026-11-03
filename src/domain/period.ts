@@ -224,3 +224,39 @@ export function elapsedFraction(range: PeriodRange, today: IsoDate): number {
   if (elapsed >= total) return 1;
   return elapsed / total;
 }
+
+/**
+ * The `count` periods of the given kind that end on or before the one containing
+ * `anchor`, newest first.
+ *
+ * Used by the history view (#14): "the last 8 weeks, this one included". Newest
+ * first is the order the list is read in, and it means index 0 is always the
+ * period the user is currently living in — worth stating, because a history
+ * screen that starts with last week is always one period confusing.
+ *
+ * Months are walked by calendar month, not by 30-day steps, so February does not
+ * shift every boundary after it.
+ */
+export function previousRanges(
+  period: "week" | "month",
+  anchor: IsoDate,
+  count: number,
+  weekStartsOn: WeekStartsOn = 1,
+): PeriodRange[] {
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new RangeError(`count must be a positive integer, got ${count}`);
+  }
+
+  const ranges: PeriodRange[] = [];
+  let current = periodRange(period, anchor, weekStartsOn);
+
+  for (let index = 0; index < count; index += 1) {
+    ranges.push(current);
+    // Step back from the day before the range start: that day belongs to the
+    // previous period by definition, which avoids every off-by-one.
+    const previousAnchor = prevDay(current.start);
+    current = periodRange(period, previousAnchor, weekStartsOn);
+  }
+
+  return ranges;
+}

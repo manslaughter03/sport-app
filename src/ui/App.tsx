@@ -10,6 +10,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { AppContext } from "./app.ts";
 import { Today } from "./screens/Today.tsx";
 import { Progress } from "./screens/Progress.tsx";
+import { History } from "./screens/History.tsx";
 import { Targets } from "./screens/Targets.tsx";
 import { Backup } from "./screens/Backup.tsx";
 import { applyPendingUpdate, onUpdateAvailable } from "../sw.ts";
@@ -18,7 +19,7 @@ export interface AppProps {
   ctx: AppContext;
 }
 
-type Screen = "today" | "progress" | "targets" | "backup";
+type Screen = "today" | "progress" | "history" | "targets" | "backup";
 
 export function App({ ctx }: AppProps) {
   const [screen, setScreen] = useState<Screen>("today");
@@ -32,6 +33,7 @@ export function App({ ctx }: AppProps) {
     <main class="app">
       {screen === "today" ? <Today ctx={ctx} /> : null}
       {screen === "progress" ? <Progress ctx={ctx} /> : null}
+      {screen === "history" ? <History ctx={ctx} /> : null}
       {screen === "targets" ? <Targets ctx={ctx} /> : null}
       {screen === "backup" ? <Backup ctx={ctx} /> : null}
 
@@ -60,6 +62,14 @@ export function App({ ctx }: AppProps) {
           onClick={() => setScreen("progress")}
         >
           Progress
+        </button>
+        <button
+          type="button"
+          class="nav__item"
+          aria-current={screen === "history" ? "page" : undefined}
+          onClick={() => setScreen("history")}
+        >
+          History
         </button>
         <button
           type="button"
