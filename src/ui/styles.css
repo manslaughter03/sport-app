@@ -612,6 +612,31 @@ h1 {
   color: #fecaca;
 }
 
+/* Storage-protection state: the honest sentence, tinted by how safe it is. */
+.persistence {
+  border-radius: 0.75rem;
+  border: 1px solid var(--track);
+  padding: 0.75rem;
+  font-size: 0.8125rem;
+  margin: 0.75rem 0;
+}
+
+.persistence--persisted {
+  border-color: #14532d;
+  background: #052e16;
+  color: #bbf7d0;
+}
+
+.persistence--best-effort {
+  border-color: #a16207;
+  background: #422006;
+  color: #fde68a;
+}
+
+.persistence--unavailable {
+  color: var(--muted);
+}
+
 .confirm {
   background: var(--surface);
   border: 1px solid var(--track);

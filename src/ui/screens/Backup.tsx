@@ -10,7 +10,7 @@
  * reported in words, not just a colour.
  */
 
-import { useCallback, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { AppContext } from "../app.ts";
 import { useLiveQuery } from "../live.ts";
 import {
@@ -21,6 +21,13 @@ import {
   serializeBackup,
   stampExport,
 } from "../../data/backup.ts";
+import {
+  describePersistence,
+  readPersistence,
+  storageUsage,
+  type PersistenceReport,
+} from "../../data/storage.ts";
+import { installState, onInstallStateChange, promptInstall, type InstallState } from "../install.ts";
 import {
   describeImport,
   importBackup,
@@ -52,6 +59,28 @@ export function Backup({ ctx }: BackupProps) {
   const [pending, setPending] = useState<{ name: string; text: string } | undefined>(undefined);
   const [details, setDetails] = useState<string[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // Storage protection is read, not assumed: `main.tsx` asks the browser to
+  // persist at startup, and this reports whatever it actually said (issue #18).
+  const [persistence, setPersistence] = useState<PersistenceReport | undefined>(undefined);
+  const [usage, setUsage] = useState<{ usedBytes: number; pct: number } | undefined>(undefined);
+  const [install, setInstall] = useState<InstallState>(() => installState());
+
+  useEffect(() => onInstallStateChange(setInstall), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const state = await readPersistence(navigator.storage);
+      const estimate = await storageUsage(navigator.storage);
+      if (cancelled) return;
+      setPersistence(describePersistence(state));
+      if (estimate !== undefined) setUsage(estimate);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const { data } = useLiveQuery<BackupData>(
     async () => {
@@ -189,9 +218,43 @@ export function Backup({ ctx }: BackupProps) {
           : `Last export: ${data.lastExportAt.slice(0, 10)}`}
       </p>
 
+      {persistence === undefined ? null : (
+        <p
+          class={`persistence persistence--${persistence.state}`}
+          data-testid="persistence"
+          data-state={persistence.state}
+        >
+          {persistence.message}
+          {usage === undefined ? null : (
+            <span class="muted" data-testid="storage-usage">
+              {" "}
+              Using {formatBytes(usage.usedBytes)} ({usage.pct} % of the space this origin may use).
+            </span>
+          )}
+        </p>
+      )}
+
       <button type="button" class="btn btn--add btn--wide" data-testid="export" onClick={() => { void handleExport(); }}>
         Export JSON
       </button>
+
+      {install === "available" ? (
+        <button
+          type="button"
+          class="btn btn--wide"
+          data-testid="install"
+          onClick={() => {
+            void promptInstall();
+          }}
+        >
+          Install on this phone
+        </button>
+      ) : null}
+      {install === "installing" ? (
+        <p class="muted" data-testid="install-pending" role="status">
+          Asking the browser…
+        </p>
+      ) : null}
 
       <h2 class="section-title">Restore from a backup</h2>
       <p class="muted">
@@ -296,6 +359,20 @@ export function Backup({ ctx }: BackupProps) {
 /** `1 set` / `3 sets`, so the destructive button never reads "1 sets". */
 function countLabel(count: number, singular: string): string {
   return `${count} ${count === 1 ? singular : `${singular}s`}`;
+}
+
+/** `1.4 MB` — enough precision to be believable, not enough to be noise. */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const units = ["kB", "MB", "GB"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
 }
 
 function message(cause: unknown): string {

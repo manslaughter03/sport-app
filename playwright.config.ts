@@ -10,6 +10,9 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
+  // `pwa-build.test.ts` sits here because it needs Node types, but it is a
+  // Vitest unit test over the build output, not a browser test (issue #18).
+  testIgnore: ["**/*.test.ts"],
   fullyParallel: false,
   forbidOnly: !!process.env["CI"],
   retries: process.env["CI"] ? 1 : 0,

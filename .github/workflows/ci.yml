@@ -40,6 +40,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Test build output
+        # Reads dist/sw.js to prove skipWaiting is only reachable from the
+        # Reload control (issue #18). It skips itself when there is no build, so
+        # it has to run *after* this one to mean anything.
+        run: npx vitest run e2e/pwa-build.test.ts
+
       - name: Verify build artefacts
         # GitHub Pages serves this repo under /sport-app/. If `base` regresses,
         # the deployed app 404s on its own assets (a blank page) — fail loudly.
