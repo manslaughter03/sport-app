@@ -52,6 +52,45 @@ test("the bottom nav stays on top of page content at every scroll offset", async
   }
 });
 
+test("the nav fits the screen without sideways overflow", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Targets" }).click();
+  await expect(page.getByTestId("target-input-ex-pushup")).toBeVisible();
+
+  // This is the actual cause of the dead-tab-tap bug: five nav items whose
+  // intrinsic widths overflowed the bar (413 px of cells in a 380 px row). On
+  // mobile Chrome that horizontal overflow makes the layout shrink to fit, and
+  // once the page is scaled a click at the tab's coordinates lands somewhere
+  // else. Asserting the cause catches it far more directly than the symptom.
+  for (const [width, height] of [
+    [360, 640],
+    [412, 839],
+  ] as Array<[number, number]>) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(100);
+
+    const metrics = await page.evaluate(() => {
+      const doc = document.documentElement;
+      const nav = document.querySelector("nav");
+      const items = Array.from(document.querySelectorAll("nav button"));
+      return {
+        overflowX: doc.scrollWidth - doc.clientWidth,
+        navOverflow: nav === null ? 0 : nav.scrollWidth - nav.clientWidth,
+        widestItem: Math.max(...items.map((item) => Math.round(item.getBoundingClientRect().right))),
+        screenWidth: doc.clientWidth,
+        // 1 means "not zoomed out"; below that Chrome scaled the page.
+        scale: window.visualViewport?.scale ?? 1,
+      };
+    });
+
+    expect(metrics.overflowX, `page overflows at ${width}x${height}`).toBeLessThanOrEqual(0);
+    expect(metrics.navOverflow, `nav overflows at ${width}x${height}`).toBeLessThanOrEqual(0);
+    expect(metrics.widestItem, `nav item past the right edge at ${width}x${height}`)
+      .toBeLessThanOrEqual(metrics.screenWidth);
+    expect(metrics.scale, `page scaled to fit at ${width}x${height}`).toBeCloseTo(1, 1);
+  }
+});
+
 test("every tab is tappable from the tallest screen", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Targets" }).click();
