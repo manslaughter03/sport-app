@@ -75,7 +75,7 @@ interface Goal {
 interface Settings {
   weekStartsOn: 1 | 7;        // Monday (default) or Sunday
   dayCutoffHour: number;      // 0..6 — entries logged before this hour count for yesterday
-  activeDayMinAmount: number; // a day counts as "active" if total >= this (default 1)
+  activeDayMinAmount: number; // a day counts as "active" if one exercise reaches this (default 1)
   schemaVersion: number;      // persisted; drives migration + export format
   lastExportAt?: IsoInstant;
   lastBackupNudgeAt?: IsoInstant;
@@ -100,6 +100,19 @@ period*. Editing a goal retroactively = split the row into two.
 
 **`activeDays` is global, not per-exercise.** Your "N days per week" is about the habit
 overall; per-exercise variants would let three goals disagree about what a good week is.
+
+**`activeDayMinAmount` compares one exercise, not the day's sum.** The threshold exists so a
+single stray 1-rep set does not count as training (O3); summing across exercises would let
+three 1-rep sets on three exercises clear a threshold of 3 that no single session reached.
+Settled in #16 and stated in the UI, not left implicit.
+
+**The three settings have different retroactivity**, and the UI says which is which (#16):
+
+| Setting | Reaches back? | Why |
+|---|---|---|
+| `weekStartsOn` | **Yes** — past weeks are re-bucketed | Week boundaries are computed at read time from the stored `day`, so every percentage moves. |
+| `dayCutoffHour` | **No** — future writes only | `entry.day` is assigned once at write time (§2.2) and never recomputed. Rewriting it would move sets the user has already seen filed. |
+| `activeDayMinAmount` | **Yes** — regularity is recomputed | It is a filter applied to stored entries when evaluating a period, not a stored property. |
 
 ---
 
