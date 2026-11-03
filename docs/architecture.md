@@ -159,6 +159,12 @@ Rendering rules that matter:
   Linear expectation, no penalty for planned rest days.
 - When `Goal.cap === true` the goal is a **ceiling**: above target renders as over-cap
   (warning tint), not as "achieved".
+- The state is also **named in words** beside the percentage (`src/domain/pace.ts`):
+  `on pace` / `ahead of pace` / `behind pace` / `done` / `over target` / `no goal`.
+  "Behind pace" is quiet, not a warning — a slow start mid-period is the normal shape of a
+  period that has not finished. The forecast states are withheld on the final day, where
+  ahead and behind stop meaning anything; the outcome states (`done`, `over target`,
+  `no goal`) survive, because they are verdicts rather than forecasts.
 
 ### 3.3 Streaks and history
 

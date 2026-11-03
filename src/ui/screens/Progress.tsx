@@ -19,6 +19,7 @@ import { DayGrid } from "../components/DayGrid.tsx";
 import { MonthGrid } from "../components/MonthGrid.tsx";
 import { PeriodSwitcher } from "../components/PeriodSwitcher.tsx";
 import { evaluate, rangeForPeriod } from "../../domain/progress.ts";
+import { paceBadge } from "../../domain/pace.ts";
 import { daysIn } from "../../domain/period.ts";
 import { formatAmountCompact, formatPercentRounded } from "../../domain/format.ts";
 import type {
@@ -153,6 +154,25 @@ export function Progress({ ctx }: ProgressProps) {
           <li key={row.exerciseId} class="volume-row" data-testid={`volume-row-${row.exerciseId}`}>
             <div class="volume-row__head">
               <span class="volume-row__name">{row.name}</span>
+              {(() => {
+                // The badge is deliberately next to the percentage, not instead
+                // of it: the number is information, the badge is the reading.
+                const badge = paceBadge(row.pace, {
+                  elapsedDays: report.elapsedDays,
+                  totalDays: report.totalDays,
+                });
+                if (badge === undefined) return null;
+                return (
+                  <span
+                    class="pace-badge"
+                    data-testid={`pace-${row.exerciseId}`}
+                    data-state={badge.state}
+                    data-tone={badge.tone}
+                  >
+                    {badge.label}
+                  </span>
+                );
+              })()}
               <span class="volume-row__pct" data-testid={`volume-${row.exerciseId}`}>
                 {row.volumePct === null ? "—" : formatPercentRounded(row.volumePct)}
               </span>
