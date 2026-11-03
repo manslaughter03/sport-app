@@ -166,6 +166,16 @@ Rendering rules that matter:
   ahead and behind stop meaning anything; the outcome states (`done`, `over target`,
   `no goal`) survive, because they are verdicts rather than forecasts.
 
+**The history list** (`previousRanges()` + `evaluatePeriods()`) is the same engine applied
+to past ranges: one query, then a pure loop — never one query per row. Three rules:
+
+- A period is evaluated against the goal that was in force *at that period's end*. This is
+  the surface where a goal-versioning regression appears first, so it is asserted directly.
+- A tracked period with no entries renders `0 %`; a blank would be a different (and false)
+  claim.
+- A period ending before the earliest stored `day` is marked "before tracking began", so
+  `0 %` of nothing is not read as a missed week.
+
 ### 3.3 Streaks and history
 
 - `periodStreak`: consecutive completed periods in which every active goal met target.

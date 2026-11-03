@@ -445,9 +445,17 @@ h1 {
 .nav {
   position: sticky;
   bottom: 0;
+  /* A sticky bar must stack above the content it floats over. */
+  z-index: 5;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.5rem;
+  /* `minmax(0, 1fr)`, not `1fr`: a bare `1fr` keeps an automatic minimum of the
+     item's content width, so five items with padding overflowed the bar
+     (413 px of cells in a 380 px row). On a phone that horizontal overflow
+     makes Chrome shrink the whole layout to fit, and a scaled layout is what
+     silently turned "tap Today" into a tap on whatever sat at those
+     coordinates — the bug behind step.spec.ts timing out. */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.25rem;
   margin-top: 1.5rem;
   padding: 0.5rem 0 calc(0.5rem + env(safe-area-inset-bottom));
   background: var(--bg);
@@ -459,10 +467,17 @@ h1 {
   background: transparent;
   color: var(--muted);
   border-radius: 0.625rem;
-  padding: 0.625rem;
+  /* Small side padding plus `min-width: 0` so a long label can shrink instead
+     of pushing the bar wider than the screen. */
+  padding: 0.625rem 0.25rem;
+  min-width: 0;
   font: inherit;
+  font-size: 0.875rem;
   cursor: pointer;
   min-height: 44px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nav__item[aria-current="page"] {
@@ -651,4 +666,98 @@ h1 {
   flex: 0 0 5rem;
   min-width: 4rem;
   font-size: 1rem;
+}
+
+/* --- history list ------------------------------------------------------ */
+
+.history-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.history-row {
+  background: var(--surface);
+  border-radius: 0.875rem;
+  padding: 0.75rem 0.875rem;
+}
+
+/* A period before tracking began is present but clearly not a result. */
+.history-row[data-untracked="true"] {
+  opacity: 0.55;
+}
+
+.history-row[data-current="true"] {
+  outline: 1px solid var(--accent);
+}
+
+.history-row__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  min-height: 32px;
+}
+
+.history-row__label {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.history-row__pct {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  font-size: 0.9375rem;
+}
+
+.history-row__volumes {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.history-row__value {
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+.history-row__details {
+  margin-top: 0.625rem;
+  padding-top: 0.625rem;
+  border-top: 1px solid var(--track);
+}
+
+.history-breakdown {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+}
+
+.history-breakdown div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.history-breakdown dt {
+  color: var(--muted);
+}
+
+.history-breakdown dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
 }

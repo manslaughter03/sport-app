@@ -11,6 +11,7 @@ import {
   prevDay,
   periodDays,
   periodRange,
+  previousRanges,
   resolveDay,
   weekRange,
 } from "./period.ts";
@@ -361,5 +362,53 @@ describe("input validation — the guards that protect stored data", () => {
 
   it("returns 1 for an empty range's elapsed fraction", () => {
     expect(elapsedFraction({ start: "2026-11-01", end: "2026-11-01" }, "2026-11-01")).toBe(1);
+  });
+});
+
+describe("previousRanges (#14)", () => {
+  it("starts with the period containing the anchor", () => {
+    const ranges = previousRanges("week", "2026-03-04", 3);
+    expect(ranges[0]).toEqual({ start: "2026-03-02", end: "2026-03-09" });
+  });
+
+  it("walks backwards one week at a time, newest first", () => {
+    const ranges = previousRanges("week", "2026-03-04", 3);
+    expect(ranges).toEqual([
+      { start: "2026-03-02", end: "2026-03-09" },
+      { start: "2026-02-23", end: "2026-03-02" },
+      { start: "2026-02-16", end: "2026-02-23" },
+    ]);
+  });
+
+  it("honours the week start", () => {
+    const ranges = previousRanges("week", "2026-03-04", 2, 7);
+    expect(ranges[0]).toEqual({ start: "2026-03-01", end: "2026-03-08" });
+    expect(ranges[1]).toEqual({ start: "2026-02-22", end: "2026-03-01" });
+  });
+
+  it("walks calendar months without drifting", () => {
+    const ranges = previousRanges("month", "2026-03-04", 4);
+    expect(ranges).toEqual([
+      { start: "2026-03-01", end: "2026-04-01" },
+      { start: "2026-02-01", end: "2026-03-01" },
+      { start: "2026-01-01", end: "2026-02-01" },
+      { start: "2025-12-01", end: "2026-01-01" },
+    ]);
+  });
+
+  it("crosses a year boundary", () => {
+    const ranges = previousRanges("week", "2026-01-01", 2);
+    expect(ranges[0]).toEqual({ start: "2025-12-29", end: "2026-01-05" });
+    expect(ranges[1]).toEqual({ start: "2025-12-22", end: "2025-12-29" });
+  });
+
+  it("returns one range for a count of one", () => {
+    expect(previousRanges("week", "2026-03-04", 1)).toHaveLength(1);
+  });
+
+  it("rejects a nonsense count", () => {
+    expect(() => previousRanges("week", "2026-03-04", 0)).toThrow(RangeError);
+    expect(() => previousRanges("week", "2026-03-04", -2)).toThrow(RangeError);
+    expect(() => previousRanges("week", "2026-03-04", 1.5)).toThrow(RangeError);
   });
 });

@@ -70,6 +70,24 @@ test("targets editor changes the target for this week", async ({ page }) => {
   await expect(page.getByTestId("saved-ex-pushup")).toBeVisible();
 });
 
+test("history lists past weeks and expands one", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Add 10 reps to Push-up").click();
+  await page.getByRole("button", { name: "History" }).click();
+
+  // This week's row is first and is the one being lived in.
+  await expect(page.getByTestId("history-count")).toContainText("last 8 weeks");
+  await expect(page.locator('[data-current="true"]')).toHaveCount(1);
+
+  const firstToggle = page.locator('[data-testid^="history-toggle-"]').first();
+  await firstToggle.click();
+  await expect(page.locator('[data-testid^="history-details-"]')).toHaveCount(1);
+
+  // Months read the same data on a calendar month instead.
+  await page.getByRole("button", { name: "Month" }).click();
+  await expect(page.getByTestId("history-count")).toContainText("last 8 months");
+});
+
 test("export downloads a valid backup file", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Add 10 reps to Push-up").click();
