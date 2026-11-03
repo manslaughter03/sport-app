@@ -245,6 +245,14 @@ db.version(2).stores({ entries: "id, exerciseId, day, [exerciseId+day]" })
             }));
 ```
 
+**Exercise lifecycle (#17).** `order` is contiguous, 1-based, over non-archived exercises;
+`move(id, toIndex)` renumbers every row in one transaction, because a half-applied move leaves
+two rows sharing a slot and `orderBy` then falls back to the primary key. There is **no
+delete**: archiving sets `archivedAt` and leaves `order` untouched, so restoring puts the
+exercise back where it was. Archived exercises disappear from Today and Progress but their
+entries keep counting towards regularity and remain in exports — a period is not rewritten
+because a movement was retired.
+
 Rules:
 
 1. **Forward-only.** No downgrade path; an older build refuses to open a newer DB
