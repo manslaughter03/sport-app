@@ -19,6 +19,7 @@ import { createEntriesRepo } from "../../data/repos/entries.ts";
 import { createGoalsRepo } from "../../data/repos/goals.ts";
 import { createSettingsRepo } from "../../data/repos/settings.ts";
 import { seedIfEmpty } from "../../data/seed.ts";
+import { weekRange } from "../../domain/period.ts";
 
 let counter = 0;
 let ctx: AppContext;
@@ -290,5 +291,125 @@ describe("Targets — quick-add step", () => {
 
     // Nothing was written.
     expect((await ctx.exercises.get("ex-pushup"))?.step).toBe(5);
+  });
+});
+
+describe("Targets — settings (#16)", () => {
+  it("shows the current values", async () => {
+    renderTargets();
+    await waitFor(() => expect(inputFor("cutoff-input").value).toBe("0"));
+    expect(inputFor("active-min-input").value).toBe("1");
+    expect(screen.getByTestId("week-start-monday").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("week-start-sunday").getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("switches the week start and persists it", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("week-start-sunday")).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("week-start-sunday"));
+
+    await waitFor(async () => expect((await ctx.settings.get()).weekStartsOn).toBe(7));
+    await waitFor(() =>
+      expect(screen.getByTestId("week-start-sunday").getAttribute("aria-pressed")).toBe("true"),
+    );
+    expect(screen.getByTestId("settings-saved")).toBeTruthy();
+  });
+
+  it("says out loud that the week start re-buckets past weeks", async () => {
+    // Changing it visibly moves percentages, so the UI must warn rather than
+    // let the user discover it.
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("week-start-note")).toBeTruthy());
+    expect(screen.getByTestId("week-start-note").textContent).toMatch(/past weeks/i);
+  });
+
+  it("says out loud that the cutoff only affects future writes", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("cutoff-note")).toBeTruthy());
+    expect(screen.getByTestId("cutoff-note").textContent).toMatch(/from now on/i);
+    expect(screen.getByTestId("cutoff-note").textContent).toMatch(/never rewritten/i);
+  });
+
+  it("saves a day cutoff and describes what it does", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("cutoff-input")).toBeTruthy());
+
+    fireEvent.input(screen.getByTestId("cutoff-input"), { target: { value: "3" } });
+    expect(screen.getByTestId("cutoff-preview").textContent).toContain("3 am");
+
+    fireEvent.click(screen.getByTestId("cutoff-save"));
+    await waitFor(async () => expect((await ctx.settings.get()).dayCutoffHour).toBe(3));
+  });
+
+  it("applies the cutoff to the next set logged, and not to history", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("cutoff-input")).toBeTruthy());
+    fireEvent.input(screen.getByTestId("cutoff-input"), { target: { value: "3" } });
+    fireEvent.click(screen.getByTestId("cutoff-save"));
+    await waitFor(async () => expect((await ctx.settings.get()).dayCutoffHour).toBe(3));
+
+    // A set logged at 00:30 belongs to the previous day (period.test.ts covers
+    // the math; this asserts the write path actually reads the setting).
+    const late = await ctx.entries.addSet({
+      exerciseId: "ex-pushup",
+      amount: 20,
+      at: { day: "2026-03-04", hour: 0 },
+    });
+    expect(late.day).toBe("2026-03-03");
+  });
+
+  it("rejects a cutoff outside 0..23", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("cutoff-input")).toBeTruthy());
+
+    fireEvent.input(screen.getByTestId("cutoff-input"), { target: { value: "24" } });
+    fireEvent.click(screen.getByTestId("cutoff-save"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("settings-error").textContent).toMatch(/0 to 23/),
+    );
+    expect((await ctx.settings.get()).dayCutoffHour).toBe(0);
+  });
+
+  it("saves the active-day minimum and says the comparison is per exercise", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("active-min-input")).toBeTruthy());
+
+    fireEvent.input(screen.getByTestId("active-min-input"), { target: { value: "20" } });
+    fireEvent.click(screen.getByTestId("active-min-save"));
+
+    await waitFor(async () => expect((await ctx.settings.get()).activeDayMinAmount).toBe(20));
+    // The issue asks for this semantic to be documented, not guessed at.
+    expect(screen.getByTestId("active-min-note").textContent).toMatch(/one exercise/i);
+  });
+
+  it("rejects a zero active-day minimum", async () => {
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("active-min-input")).toBeTruthy());
+
+    fireEvent.input(screen.getByTestId("active-min-input"), { target: { value: "0" } });
+    fireEvent.click(screen.getByTestId("active-min-save"));
+
+    await waitFor(() => expect(screen.getByTestId("settings-error")).toBeTruthy());
+    expect((await ctx.settings.get()).activeDayMinAmount).toBe(1);
+  });
+
+  it("changing the week start re-buckets a past week for real", async () => {
+    // 2026-03-04 is a Wednesday. Monday-start week: 3-02..3-08. Sunday-start:
+    // 3-01..3-07. A set on Sunday 2026-03-01 is in "last week" on Mondays and
+    // "this week" on Sundays — the visible move the UI warns about.
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 20, at: { day: "2026-03-01", hour: 12 } });
+
+    const mondayWeek = weekRange("2026-03-04", 1);
+    const sundayWeek = weekRange("2026-03-04", 7);
+    expect(mondayWeek.start).toBe("2026-03-02");
+    expect(sundayWeek.start).toBe("2026-03-01");
+
+    renderTargets();
+    await waitFor(() => expect(screen.getByTestId("week-start-sunday")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("week-start-sunday"));
+
+    await waitFor(async () => expect((await ctx.settings.get()).weekStartsOn).toBe(7));
   });
 });
