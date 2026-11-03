@@ -82,6 +82,36 @@ test("export downloads a valid backup file", async ({ page }) => {
   expect(download.suggestedFilename()).toMatch(/^sport-app-backup-\d{4}-\d{2}-\d{2}\.json$/);
 });
 
+test("export then import restores the data onto a wiped install", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Add 10 reps to Push-up").click();
+  await page.getByLabel("Add 10 reps to Push-up").click();
+  await page.getByRole("button", { name: "Backup" }).click();
+  await expect(page.getByTestId("stat-entries")).toHaveText("2");
+
+  // Export the two sets to disk.
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("export").click();
+  const backupPath = await (await downloadPromise).path();
+
+  // Wipe the install the way Android would: same origin, no IndexedDB.
+  await page.evaluate(async () => {
+    indexedDB.deleteDatabase("sport-app");
+  });
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Backup" })).toBeVisible();
+  await page.getByRole("button", { name: "Backup" }).click();
+  await expect(page.getByTestId("stat-entries")).toHaveText("0");
+
+  // Restore it through the file input, which the button drives.
+  await page.getByTestId("import-input").setInputFiles(backupPath!);
+  await expect(page.getByTestId("import-confirm")).toBeVisible();
+  await page.getByTestId("import-merge").click();
+
+  await expect(page.getByTestId("import-status")).toContainText("+2 sets");
+  await expect(page.getByTestId("stat-entries")).toHaveText("2");
+});
+
 test("installs a service worker and works offline after first load", async ({ page, context }) => {
   await page.goto("/");
 

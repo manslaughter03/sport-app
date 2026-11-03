@@ -504,6 +504,31 @@ h1 {
   margin-top: 0.5rem;
 }
 
+/* Destructive actions: the confirmation for replace-all has to look like one. */
+.btn--danger {
+  background: #3b0a0a;
+  border-color: var(--danger);
+  color: #fecaca;
+}
+
+.confirm {
+  background: var(--surface);
+  border: 1px solid var(--track);
+  border-radius: 0.75rem;
+  padding: 0.875rem;
+  margin-top: 0.75rem;
+}
+
+.confirm p {
+  font-size: 0.875rem;
+  margin: 0 0 0.5rem;
+}
+
+.confirm .muted {
+  font-size: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
 /* --- update toast ------------------------------------------------------ */
 
 .toast {
