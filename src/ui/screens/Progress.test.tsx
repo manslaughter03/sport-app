@@ -317,3 +317,114 @@ describe("Progress — month view (#12)", () => {
     expect(screen.queryByTestId("month-cell-2026-04-01")).toBeNull();
   });
 });
+
+describe("Progress — pace badges (#13)", () => {
+  /** Moves the injected clock, since the badge depends on the day of the period. */
+  function setDay(day: string) {
+    ctx = {
+      ...ctx,
+      clock: clockAt(day),
+    };
+  }
+
+  it("says 'behind pace' in words on day 3 of 7", async () => {
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 70 });
+    renderProgress();
+
+    await waitFor(() => expect(screen.getByTestId("pace-ex-pushup")).toBeTruthy());
+    expect(screen.getByTestId("pace-ex-pushup").textContent).toBe("behind pace");
+    // Quiet, not a warning: a slow start mid-week is normal.
+    expect(screen.getByTestId("pace-ex-pushup").getAttribute("data-tone")).toBe("quiet");
+    // The unclamped number is still there; the badge adds, it does not replace.
+    expect(screen.getByTestId("volume-ex-pushup").textContent).toContain("10 %");
+  });
+
+  it("says 'ahead of pace' when the week is running hot", async () => {
+    // Day 3 of 7 expects ~43 %; 500/700 is 71 %.
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 500 });
+    renderProgress();
+
+    await waitFor(() => expect(screen.getByTestId("pace-ex-pushup")).toBeTruthy());
+    expect(screen.getByTestId("pace-ex-pushup").textContent).toBe("ahead of pace");
+    expect(screen.getByTestId("pace-ex-pushup").getAttribute("data-tone")).toBe("good");
+  });
+
+  it("says 'done' — never a warning — when an aspirational goal is passed", async () => {
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 900 });
+    renderProgress();
+
+    await waitFor(() => expect(screen.getByTestId("pace-ex-pushup")).toBeTruthy());
+    expect(screen.getByTestId("pace-ex-pushup").textContent).toBe("done");
+    expect(screen.getByTestId("pace-ex-pushup").getAttribute("data-tone")).toBe("good");
+  });
+
+  it("says 'over target' only for a capped goal", async () => {
+    // Flip the seeded push-up goal to a ceiling. Every row for that scope must
+    // be capped: `goalInForce` picks the one in force at the period end.
+    const pushupGoals = (await ctx.db.goals.toArray()).filter(
+      (g) => g.scope.kind === "exercise" && g.scope.exerciseId === "ex-pushup",
+    );
+    await ctx.db.goals.bulkPut(pushupGoals.map((g) => ({ ...g, cap: true })));
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 900 });
+
+    renderProgress();
+    await waitFor(() => expect(screen.getByTestId("pace-ex-pushup")).toBeTruthy());
+    expect(screen.getByTestId("pace-ex-pushup").textContent).toBe("over target");
+    expect(screen.getByTestId("pace-ex-pushup").getAttribute("data-tone")).toBe("warning");
+  });
+
+  it("hides ahead/behind on the last day of the period", async () => {
+    // 2026-03-08 is the Sunday: the week is over, so a pace has no meaning.
+    setDay("2026-03-08");
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 70, at: { day: "2026-03-02", hour: 12 } });
+
+    renderProgress();
+    await waitFor(() => expect(screen.getByTestId("volume-ex-pushup")).toBeTruthy());
+    expect(screen.queryByTestId("pace-ex-pushup")).toBeNull();
+  });
+
+  it("keeps the outcome badge on the last day", async () => {
+    setDay("2026-03-08");
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 700, at: { day: "2026-03-02", hour: 12 } });
+
+    renderProgress();
+    await waitFor(() => expect(screen.getByTestId("pace-ex-pushup")).toBeTruthy());
+    expect(screen.getByTestId("pace-ex-pushup").textContent).toBe("done");
+  });
+
+  it("says 'no goal' for an exercise without a target", async () => {
+    await ctx.exercises.create({ name: "Pull-up", kind: "reps", unit: "reps", step: 5, order: 9 });
+
+    renderProgress();
+    await waitFor(() => expect(screen.getByTestId("pace-ex-pushup")).toBeTruthy());
+
+    // The new exercise has no goal: a dash for the percentage, "no goal" as the
+    // badge, and never NaN or a divide-by-zero.
+    const pullup = (await ctx.exercises.list()).find((e) => e.name === "Pull-up");
+    expect(screen.getByTestId(`pace-${pullup!.id}`).textContent).toBe("no goal");
+    expect(screen.getByTestId(`volume-${pullup!.id}`).textContent).toBe("—");
+    // The seeded push-up keeps its real target and reads 0 %, not a dash.
+    expect(screen.getByTestId("volume-ex-pushup").textContent).toContain("0 %");
+  });
+
+  it("follows the selected period, so a month badge is measured against the month", async () => {
+    await ctx.goals.create({
+      scope: { kind: "exercise", exerciseId: "ex-pushup" },
+      period: "month",
+      target: 3000,
+      cap: false,
+      effectiveFrom: "2026-01-01",
+    });
+    // 1400 by day 4 of 31: well ahead of the linear 3000 × 4/31 ≈ 387.
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 1400 });
+
+    renderProgress();
+    await waitFor(() => expect(screen.getByTestId("pace-ex-pushup")).toBeTruthy());
+    expect(screen.getByTestId("pace-ex-pushup").getAttribute("data-state")).toBe("done");
+
+    fireEvent.click(screen.getByRole("button", { name: "Month" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("pace-ex-pushup").getAttribute("data-state")).toBe("ahead"),
+    );
+  });
+});
