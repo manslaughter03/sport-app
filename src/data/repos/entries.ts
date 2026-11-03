@@ -106,9 +106,19 @@ export function createEntriesRepo(db: SportDatabase, clock: Clock, settings: Set
     async lastForExercise(exerciseId) {
       const rows = await db.entries.where("exerciseId").equals(exerciseId).toArray();
       if (rows.length === 0) return undefined;
-      // `seq` breaks the tie when two sets share a millisecond, which is common
-      // for fast tapping and would otherwise make undo delete an arbitrary row.
-      return rows.reduce((latest, row) => (row.seq > latest.seq ? row : latest));
+      // `createdAt` is when the set was logged; `seq` only breaks the tie when
+      // two sets share a millisecond, which is common for fast tapping.
+      //
+      // The order matters now that imports exist: a set merged in from another
+      // device gets a *fresh* `seq` (its number would have collided), so
+      // ordering on `seq` alone would make "undo last" delete a set that was
+      // logged weeks ago. Undo means the newest set by wall time.
+      return rows.reduce((latest, row) =>
+        row.createdAt > latest.createdAt ||
+        (row.createdAt === latest.createdAt && row.seq > latest.seq)
+          ? row
+          : latest,
+      );
     },
 
     all() {

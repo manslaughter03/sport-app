@@ -227,10 +227,34 @@ JSON; the envelope carries the version so imports can be migrated:
 
 Import = validate envelope → run the import-migration chain to current version → **merge
 by id** (idempotent re-import, never duplicates) → report counts. "Replace all" sits
-behind a confirmation. This is the only recovery path if Android clears site data, so it
-ships in v0 — not "later". Plus `navigator.storage.persist()` on first launch (best effort
+behind a confirmation. Export is v0; import landed in Phase 2 (#15) — the asymmetry was
+the risk, not the format. Plus `navigator.storage.persist()` on first launch (best effort
 against eviction) and a nudge when `lastExportAt` is >~14 days old and there are ≥7 days
 of entries.
+
+**The import contract** (`src/data/import.ts`), in the order it is applied:
+
+1. **Validate, then write.** `parseBackup` checks the envelope; `validateBackup` checks
+   every row and every foreign key (`entry.exerciseId`, an exercise-scoped goal's
+   `exerciseId`). A file naming a missing exercise is refused before a single row is
+   touched — half-imported history is worse than a refusal.
+2. **Merge by id.** Re-importing the same file is a no-op: identical rows count as
+   `skipped`, never re-added.
+3. **Conflicts: last writer wins, by `createdAt`.** Same id, different content → the row
+   with the later `createdAt` survives, and the overwritten count is reported. An older
+   file can therefore never roll data back. `Exercise` has no `createdAt`, so there is no
+   defensible "later": the local row wins and the disagreement is reported as a skip
+   rather than applied silently.
+4. **Goals are never merged on content.** Two rows with different ids and the same
+   scope+period both survive; `goalInForce` already tie-breaks, and collapsing them here
+   would rewrite versioned history.
+5. **One transaction.** Merge and replace-all run inside a single Dexie transaction over
+   all four tables. Any failure leaves the database exactly as it was.
+6. **`seq` is re-derived when it collides.** `seq` is per database; a merged row keeps its
+   number only if the slot is free, otherwise it is renumbered in file order above the
+   current maximum. Replace-all keeps the file's numbering, so a restore is byte-for-byte
+   equal. Because merged rows can carry a high `seq` while being old, `lastForExercise`
+   orders on `createdAt` and uses `seq` only as the same-millisecond tiebreak.
 
 ### 5.4 App update mechanics (PWA)
 

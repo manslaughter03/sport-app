@@ -18,7 +18,7 @@ import { createEntriesRepo } from "../../data/repos/entries.ts";
 import { createGoalsRepo } from "../../data/repos/goals.ts";
 import { createSettingsRepo } from "../../data/repos/settings.ts";
 import { seedIfEmpty } from "../../data/seed.ts";
-import { parseBackup } from "../../data/backup.ts";
+import { buildBackup, parseBackup, serializeBackup } from "../../data/backup.ts";
 
 let counter = 0;
 let ctx: AppContext;
@@ -201,5 +201,137 @@ describe("Backup nudge", () => {
     fireEvent.click(screen.getByTestId("export"));
 
     await waitFor(() => expect(screen.queryByTestId("backup-nudge")).toBeNull());
+  });
+});
+
+describe("Backup import", () => {
+  /** Builds a valid backup file the component can receive through the input. */
+  async function backupFile(): Promise<File> {
+    const backup = await buildBackup(ctx.db, ctx.clock);
+    return new File([serializeBackup(backup)], "sport-app-backup-2026-03-04.json", {
+      type: "application/json",
+    });
+  }
+
+  async function choose(file: File): Promise<void> {
+    renderBackup();
+    await waitFor(() => expect(screen.getByTestId("import-input")).toBeTruthy());
+    const input = screen.getByTestId("import-input") as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    fireEvent.change(input);
+    await waitFor(() => expect(screen.getByTestId("import-confirm")).toBeTruthy());
+  }
+
+  it("asks before writing anything", async () => {
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 20 });
+    const file = await backupFile();
+    await choose(file);
+
+    // Nothing has been written yet: both modes are still on the table.
+    expect(screen.getByTestId("import-merge")).toBeTruthy();
+    expect(screen.getByTestId("import-replace")).toBeTruthy();
+    expect(screen.getByTestId("import-replace").textContent).toContain("1 set will be deleted");
+  });
+
+  it("cancel leaves the database untouched", async () => {
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 20 });
+    const file = await backupFile();
+    await choose(file);
+
+    fireEvent.click(screen.getByTestId("import-cancel"));
+
+    await waitFor(() => expect(screen.queryByTestId("import-confirm")).toBeNull());
+    expect(await ctx.db.entries.count()).toBe(1);
+  });
+
+  it("merges a file into an existing database and reports the counts", async () => {
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 20 });
+    const file = await backupFile();
+
+    // Data logged after the export: the merge must keep it and add nothing.
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 15 });
+
+    await choose(file);
+    fireEvent.click(screen.getByTestId("import-merge"));
+
+    await waitFor(() => expect(screen.getByTestId("import-status")).toBeTruthy());
+    // Nothing was added or overwritten: every row in the file is already here.
+    expect(screen.getByTestId("import-status").textContent).toContain("Nothing to do");
+    // The set logged after the export survives a merge.
+    expect(await ctx.db.entries.count()).toBe(2);
+  });
+
+  it("replace-all restores the file and reports what was removed", async () => {
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 20 });
+    const file = await backupFile();
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 15 });
+
+    await choose(file);
+    fireEvent.click(screen.getByTestId("import-replace"));
+
+    await waitFor(() => expect(screen.getByTestId("import-status")).toBeTruthy());
+    expect(screen.getByTestId("import-status").textContent).toContain("Replaced everything");
+    await waitFor(async () => expect(await ctx.db.entries.count()).toBe(1));
+    // The import's own outcome is reported, not the export's status line.
+    expect(screen.queryByTestId("export-status")).toBeNull();
+  });
+
+  it("refuses a file from a newer app version with a readable message", async () => {
+    const backup = await buildBackup(ctx.db, ctx.clock);
+    const newer = new File(
+      [JSON.stringify({ ...backup, schemaVersion: backup.schemaVersion + 1 })],
+      "newer.json",
+      { type: "application/json" },
+    );
+
+    renderBackup();
+    await waitFor(() => expect(screen.getByTestId("import-input")).toBeTruthy());
+    const input = screen.getByTestId("import-input") as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [newer], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("import-error").textContent).toMatch(/newer version/i),
+    );
+    // No confirmation appears for a file that cannot be applied.
+    expect(screen.queryByTestId("import-confirm")).toBeNull();
+  });
+
+  it("refuses a file that is not a backup at all", async () => {
+    const bogus = new File(["{"], "notes.json", { type: "application/json" });
+
+    renderBackup();
+    await waitFor(() => expect(screen.getByTestId("import-input")).toBeTruthy());
+    const input = screen.getByTestId("import-input") as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [bogus], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("import-error").textContent).toMatch(/not valid JSON/i),
+    );
+  });
+
+  it("shows the re-sequencing note when imported sets had to be re-numbered", async () => {
+    await ctx.entries.addSet({ exerciseId: "ex-pushup", amount: 20 });
+    // A foreign set claiming the same seq slot.
+    const backup = await buildBackup(ctx.db, ctx.clock);
+    backup.data.entries = [
+      ...backup.data.entries,
+      {
+        id: "foreign-1",
+        exerciseId: "ex-pushup",
+        day: "2026-03-01",
+        amount: 12,
+        createdAt: "2026-03-01T10:00:00.000Z",
+        seq: 1,
+      },
+    ];
+    const file = new File([serializeBackup(backup)], "collide.json", { type: "application/json" });
+
+    await choose(file);
+    fireEvent.click(screen.getByTestId("import-merge"));
+
+    await waitFor(() => expect(screen.getByTestId("import-details")).toBeTruthy());
+    expect(screen.getByTestId("import-details").textContent).toContain("re-numbered");
   });
 });
