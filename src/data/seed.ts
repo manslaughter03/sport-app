@@ -16,7 +16,9 @@ import type { Entry, Exercise, Goal } from "../domain/types.ts";
 export const SEED_EXERCISES: readonly Exercise[] = [
   { id: "ex-pushup", name: "Push-up", kind: "reps", unit: "reps", step: 5, order: 1 },
   { id: "ex-core", name: "Core", kind: "duration", unit: "s", step: 30, order: 2 },
-  { id: "ex-toe-touch", name: "Toe Touch", kind: "reps", unit: "reps", step: 5, order: 3 },
+  // Toe touches arrive in the hundreds, so the quick-add step is large: the
+  // buttons become +50 / +100 instead of +5 / +10 (editable on Targets).
+  { id: "ex-toe-touch", name: "Toe Touch", kind: "reps", unit: "reps", step: 50, order: 3 },
 ];
 
 /** Weekly targets: 700 push-ups, 3000 s of core, 1000 toe touches, 4 active days. */

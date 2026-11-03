@@ -332,6 +332,17 @@ describe("seed", () => {
     expect(activeDays?.target).toBe(4);
   });
 
+  it("seeds high-volume steps so quick-add is usable per exercise", async () => {
+    await seedIfEmpty(db, fixedClock());
+    const exercises = await db.table("exercises").toArray();
+    const stepOf = (name: string) => exercises.find((e) => e.name === name)?.step;
+
+    // Push-ups arrive in tens, toe touches in hundreds, core in 30 s blocks.
+    expect(stepOf("Push-up")).toBe(5);
+    expect(stepOf("Toe Touch")).toBe(50);
+    expect(stepOf("Core")).toBe(30);
+  });
+
   it("is idempotent — reopening does not duplicate", async () => {
     const clock = fixedClock();
     await seedIfEmpty(db, clock);
