@@ -522,3 +522,22 @@ h1 {
   z-index: 10;
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
 }
+
+/* --- quick-add step editor (targets screen) ---------------------------- */
+
+.target-row__step {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--track);
+}
+
+.target-row__step label {
+  display: block;
+  margin-bottom: 0.375rem;
+}
+
+.target-row__input--small {
+  flex: 0 0 5rem;
+  min-width: 4rem;
+  font-size: 1rem;
+}

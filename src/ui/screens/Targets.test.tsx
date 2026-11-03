@@ -11,6 +11,7 @@ import {
 } from "@testing-library/preact";
 import { createApp, type AppContext } from "../app.ts";
 import { Targets } from "./Targets.tsx";
+import { presetsFor } from "../components/QuickAdd.tsx";
 import { createDatabase } from "../../data/db.ts";
 import { createClock } from "../../data/clock.ts";
 import { createExercisesRepo } from "../../data/repos/exercises.ts";
@@ -220,5 +221,74 @@ describe("Targets — validation", () => {
     fireEvent.click(screen.getByTestId("save-ex-pushup"));
 
     await waitFor(() => expect(screen.getByTestId("saved-ex-pushup").textContent).toContain("Saved"));
+  });
+});
+
+describe("Targets — quick-add step", () => {
+  it("shows the current step for reps exercises", async () => {
+    renderTargets();
+    await waitFor(() => expect(inputFor("step-input-ex-pushup").value).toBe("5"));
+    // Toe Touch is high-volume, so its step is larger.
+    expect(inputFor("step-input-ex-toe-touch").value).toBe("50");
+  });
+
+  it("does not offer a step for a duration exercise", async () => {
+    renderTargets();
+    await waitFor(() => expect(inputFor("target-input-ex-core").value).toBe("3000"));
+    // Core's buttons are fixed second presets (30/60/90), so a step is meaningless.
+    expect(screen.queryByTestId("step-input-ex-core")).toBeNull();
+  });
+
+  it("saves a new step and the quick-add buttons follow", async () => {
+    renderTargets();
+    await waitFor(() => expect(inputFor("step-input-ex-toe-touch").value).toBe("50"));
+
+    fireEvent.input(inputFor("step-input-ex-toe-touch"), { target: { value: "100" } });
+    fireEvent.click(screen.getByTestId("save-step-ex-toe-touch"));
+
+    await waitFor(async () => {
+      const exercises = await ctx.exercises.list();
+      expect(exercises.find((e) => e.id === "ex-toe-touch")?.step).toBe(100);
+    });
+
+    // The live Today screen now offers +100 / +200.
+    renderTargets();
+    await waitFor(async () => {
+      const updated = await ctx.exercises.get("ex-toe-touch");
+      expect(presetsFor(updated!)).toEqual([100, 200]);
+    });
+  });
+
+  it("changes a step without touching goal history", async () => {
+    renderTargets();
+    await waitFor(() => expect(inputFor("step-input-ex-pushup").value).toBe("5"));
+
+    fireEvent.input(inputFor("step-input-ex-pushup"), { target: { value: "25" } });
+    fireEvent.click(screen.getByTestId("save-step-ex-pushup"));
+
+    await waitFor(async () => {
+      expect((await ctx.exercises.get("ex-pushup"))?.step).toBe(25);
+    });
+
+    // A step is a UI convenience, not a goal: no split row was created.
+    const goals = await ctx.goals.all();
+    const pushupGoals = goals.filter(
+      (g) => g.scope.kind === "exercise" && g.scope.exerciseId === "ex-pushup",
+    );
+    expect(pushupGoals).toHaveLength(1);
+  });
+
+  it("rejects zero, negative and non-numeric steps", async () => {
+    renderTargets();
+    await waitFor(() => expect(inputFor("step-input-ex-pushup").value).toBe("5"));
+
+    for (const bad of ["0", "-5", "", "abc", "2.5"]) {
+      fireEvent.input(inputFor("step-input-ex-pushup"), { target: { value: bad } });
+      fireEvent.click(screen.getByTestId("save-step-ex-pushup"));
+      await waitFor(() => expect(screen.getByTestId("step-error-ex-pushup")).toBeTruthy());
+    }
+
+    // Nothing was written.
+    expect((await ctx.exercises.get("ex-pushup"))?.step).toBe(5);
   });
 });

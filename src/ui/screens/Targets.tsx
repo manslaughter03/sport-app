@@ -52,6 +52,12 @@ export function Targets({ ctx }: TargetsProps) {
   const [errors, setErrors] = useState<Record<Slot, string>>({});
   const [saved, setSaved] = useState<Record<Slot, boolean>>({});
 
+  // Quick-add step, kept in separate maps so its messages never collide with a
+  // target's: the two live on the same row but are different kinds of edit.
+  const [stepDraft, setStepDraft] = useState<Record<Slot, string>>({});
+  const [stepErrors, setStepErrors] = useState<Record<Slot, string>>({});
+  const [stepSaved, setStepSaved] = useState<Record<Slot, boolean>>({});
+
   const current = useMemo(() => {
     if (data === undefined) return new Map<Slot, Goal>();
     const map = new Map<Slot, Goal>();
@@ -98,6 +104,33 @@ export function Targets({ ctx }: TargetsProps) {
           [slot]: cause instanceof Error ? cause.message : String(cause),
         }));
         setSaved((prev) => ({ ...prev, [slot]: false }));
+      }
+    },
+    [ctx],
+  );
+
+  /**
+   * Changing the quick-add step edits the exercise row, not a goal: a step is a
+   * tap-size convenience, so versioning it would create pointless goal rows.
+   */
+  const saveStep = useCallback(
+    async (exerciseId: string, raw: string) => {
+      const value = parseTarget(raw);
+      if (value === undefined) {
+        setStepErrors((prev) => ({ ...prev, [exerciseId]: "Whole number greater than zero." }));
+        setStepSaved((prev) => ({ ...prev, [exerciseId]: false }));
+        return;
+      }
+      try {
+        await ctx.exercises.update(exerciseId, { step: value });
+        setStepErrors((prev) => ({ ...prev, [exerciseId]: "" }));
+        setStepSaved((prev) => ({ ...prev, [exerciseId]: true }));
+      } catch (cause) {
+        setStepErrors((prev) => ({
+          ...prev,
+          [exerciseId]: cause instanceof Error ? cause.message : String(cause),
+        }));
+        setStepSaved((prev) => ({ ...prev, [exerciseId]: false }));
       }
     },
     [ctx],
@@ -190,6 +223,56 @@ export function Targets({ ctx }: TargetsProps) {
                 </p>
               )}
 
+              {kindOfOptional(data.exercises, slot) === "reps" ? (
+                <div class="target-row__step">
+                  <label class="muted" for={`step-input-${slot}`}>
+                    Quick-add buttons
+                  </label>
+                  <div class="target-row__controls">
+                    <input
+                      id={`step-input-${slot}`}
+                      data-testid={`step-input-${slot}`}
+                      class="target-row__input target-row__input--small"
+                      type="text"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      value={stepDraft[slot] ?? String(stepOf(data.exercises, slot))}
+                      onInput={(event) => {
+                        const next = (event.currentTarget as HTMLInputElement).value;
+                        setStepDraft((prev) => ({ ...prev, [slot]: next }));
+                        setStepSaved((prev) => ({ ...prev, [slot]: false }));
+                      }}
+                    />
+                    <span class="muted" data-testid={`step-preview-${slot}`}>
+                      {(() => {
+                        const parsed = parseTarget(stepDraft[slot] ?? String(stepOf(data.exercises, slot)));
+                        return parsed === undefined ? "" : `+${parsed} / +${parsed * 2}`;
+                      })()}
+                    </span>
+                    <button
+                      type="button"
+                      class="btn btn--add"
+                      data-testid={`save-step-${slot}`}
+                      onClick={() => {
+                        void saveStep(slot, stepDraft[slot] ?? String(stepOf(data.exercises, slot)));
+                      }}
+                    >
+                      Save
+                    </button>
+                  </div>
+                  {stepErrors[slot] === undefined || stepErrors[slot] === "" ? null : (
+                    <p class="error" role="alert" data-testid={`step-error-${slot}`}>
+                      {stepErrors[slot]}
+                    </p>
+                  )}
+                  {stepSaved[slot] === true ? (
+                    <p class="saved" data-testid={`step-saved-${slot}`}>
+                      Saved
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
               {message === undefined || message === "" ? null : (
                 <p class="error" role="alert" data-testid={`error-${slot}`}>
                   {message}
@@ -211,4 +294,16 @@ export function Targets({ ctx }: TargetsProps) {
 
 function kindOf(exercises: readonly Exercise[], exerciseId: string): "reps" | "duration" {
   return exercises.find((e) => e.id === exerciseId)?.kind ?? "reps";
+}
+
+/** Like `kindOf`, but undefined for slots that are not exercises (active days). */
+function kindOfOptional(
+  exercises: readonly Exercise[],
+  slot: string,
+): "reps" | "duration" | undefined {
+  return exercises.find((e) => e.id === slot)?.kind;
+}
+
+function stepOf(exercises: readonly Exercise[], exerciseId: string): number {
+  return exercises.find((e) => e.id === exerciseId)?.step ?? 5;
 }
